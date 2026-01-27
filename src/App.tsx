@@ -96,7 +96,7 @@ function App() {
         }
 
         toast.success(`Update available: ${update.version}`);
-        await update.downloadAndInstall();
+        await update.downloadAndInstall({ restart: true });
         toast.success("Update installed. Restarting…");
       } finally {
         setIsCheckingUpdates(false);

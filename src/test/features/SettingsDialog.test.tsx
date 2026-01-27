@@ -45,6 +45,7 @@ describe("SettingsDialog", () => {
     const onTheme = vi.fn();
     const onExpiryMinutes = vi.fn();
     const onTrashDays = vi.fn();
+    const onCheckUpdates = vi.fn();
 
     const settings: AppSettings = {
       expiryMinutes: 10_080,
@@ -59,6 +60,8 @@ describe("SettingsDialog", () => {
         onTheme,
         onExpiryMinutes,
         onTrashDays,
+        isCheckingUpdates: false,
+        onCheckUpdates,
       }),
     );
 
