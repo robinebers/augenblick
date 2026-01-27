@@ -41,7 +41,7 @@ export function ExpiryRing({ lastInteraction, expiryMinutes }: Props) {
       <Tooltip>
         <TooltipTrigger asChild>
           <span
-            className="shrink-0 rounded p-0.5 text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
+            className="shrink-0 p-0.5"
             aria-label={tooltipText}
           >
             <svg width="20" height="20" viewBox="0 0 20 20" className="block" aria-label="Expiry">

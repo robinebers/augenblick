@@ -13,6 +13,7 @@ import {
   linkTooltipPlugin,
   configureLinkTooltip,
   linkTooltipConfig,
+  toggleLinkCommand,
 } from "@milkdown/kit/component/link-tooltip";
 import { nord } from "@milkdown/theme-nord";
 import type { Node as ProseNode } from "@milkdown/prose/model";
@@ -511,10 +512,30 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
     };
     window.addEventListener("keydown", onSlashKeyDown, true);
 
+    // Lucide icon SVGs (size 18, strokeWidth 1.75)
+    const lucideAttrs = 'width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"';
+    const icons = {
+      bold: `<svg ${lucideAttrs}><path d="M6 12h8a4 4 0 0 0 0-8H6v8Z"/><path d="M6 12h9a4 4 0 0 1 0 8H6v-8Z"/></svg>`,
+      italic: `<svg ${lucideAttrs}><line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/></svg>`,
+      code: `<svg ${lucideAttrs}><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
+      link: `<svg ${lucideAttrs}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+    };
+
     const selectionToolbarProvider = new TooltipProvider({
       content: selectionToolbarEl,
       offset: 8,
-      shouldShow: (v) => !readOnlyRef.current && v.editable && v.state.selection.content().size > 0,
+      shouldShow: (v) => {
+        if (readOnlyRef.current || !v.editable) return false;
+        if (!v.state.selection.content().size) return false;
+        // Hide when selection touches any link (let link tooltip handle it)
+        const { from, to } = v.state.selection;
+        let hasLink = false;
+        v.state.doc.nodesBetween(from, to, (node) => {
+          if (node.marks?.some((m) => m.type.name === "link")) hasLink = true;
+        });
+        if (hasLink) return false;
+        return true;
+      },
     });
 
     selectionToolbarEl.addEventListener("mousedown", (e) => e.preventDefault());
@@ -528,12 +549,18 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
         runEditorAction((ed) => ed.action(callCommand(toggleEmphasisCommand.key)));
       if (action === "code")
         runEditorAction((ed) => ed.action(callCommand(toggleInlineCodeCommand.key)));
+      if (action === "link") {
+        // Hide selection toolbar immediately since link tooltip will take over
+        selectionToolbarProvider.hide();
+        runEditorAction((ed) => ed.action(callCommand(toggleLinkCommand.key)));
+      }
     });
     selectionToolbarEl.innerHTML = `
       <div class="mk-selection-inner">
-        <button type="button" class="mk-selection-btn" data-action="bold"><strong>B</strong></button>
-        <button type="button" class="mk-selection-btn" data-action="italic"><em>I</em></button>
-        <button type="button" class="mk-selection-btn" data-action="code"><span>&lt;/&gt;</span></button>
+        <button type="button" class="mk-selection-btn" data-action="bold">${icons.bold}</button>
+        <button type="button" class="mk-selection-btn" data-action="italic">${icons.italic}</button>
+        <button type="button" class="mk-selection-btn" data-action="code">${icons.code}</button>
+        <button type="button" class="mk-selection-btn" data-action="link">${icons.link}</button>
       </div>
     `;
 
