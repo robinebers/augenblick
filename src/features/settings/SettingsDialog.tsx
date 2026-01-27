@@ -53,7 +53,7 @@ export function SettingsDialog({ settings, onClose, onTheme, onExpiryDays, onTra
           <div>
             <div className="mb-2 text-sm font-medium">Note Expiry</div>
             <Select value={String(settings.expiryDays)} onValueChange={(v) => onExpiryDays(Number(v))}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -72,7 +72,7 @@ export function SettingsDialog({ settings, onClose, onTheme, onExpiryDays, onTra
               value={String(settings.trashRetentionDays)}
               onValueChange={(v) => onTrashDays(Number(v))}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -64,7 +64,7 @@ export function CommandPalette({
       },
       {
         id: "pin-current",
-        label: "Pin / Unpin Current",
+        label: "Pin / Unpin",
         icon: "pin",
         shortcut: "⌘P",
         keywords: ["pin", "unpin"],
