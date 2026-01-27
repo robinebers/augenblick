@@ -23,7 +23,7 @@ It's not about losing information, it's about not drowning in it.
 
 ## Screenshots
 
-*Coming soon*
+![Augenblick screenshot](screenshot.png)
 
 ## Keyboard Shortcuts
 
