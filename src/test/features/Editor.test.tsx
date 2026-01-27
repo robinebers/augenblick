@@ -281,6 +281,10 @@ function createView(text: string) {
       this.replaced = slice;
       return this;
     },
+    delete(from: number, to: number) {
+      this.deleted = { from, to };
+      return this;
+    },
     setNodeMarkup(pos: number, _type: any, attrs: any) {
       this.nodeMarkup = { pos, attrs };
       return this;
