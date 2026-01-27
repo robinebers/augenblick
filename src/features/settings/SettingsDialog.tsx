@@ -1,4 +1,5 @@
 import type { AppSettings } from "@/lib/types";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -15,9 +16,19 @@ type Props = {
   onTheme: (theme: AppSettings["theme"]) => void;
   onExpiryMinutes: (minutes: number) => void;
   onTrashDays: (days: number) => void;
+  isCheckingUpdates: boolean;
+  onCheckUpdates: () => void;
 };
 
-export function SettingsDialog({ settings, onClose, onTheme, onExpiryMinutes, onTrashDays }: Props) {
+export function SettingsDialog({
+  settings,
+  onClose,
+  onTheme,
+  onExpiryMinutes,
+  onTrashDays,
+  isCheckingUpdates,
+  onCheckUpdates,
+}: Props) {
   const expiryOptions = [
     { minutes: 360, label: "6 hours" },
     { minutes: 720, label: "12 hours" },
@@ -94,6 +105,13 @@ export function SettingsDialog({ settings, onClose, onTheme, onExpiryMinutes, on
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <div className="mb-2 text-sm font-medium">Updates</div>
+            <Button className="w-full" onClick={onCheckUpdates} disabled={isCheckingUpdates}>
+              {isCheckingUpdates ? "Checking…" : "Check for updates"}
+            </Button>
           </div>
         </div>
       </DialogContent>
