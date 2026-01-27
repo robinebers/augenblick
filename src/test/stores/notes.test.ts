@@ -195,4 +195,185 @@ describe("notesStore", () => {
     expect(apiMock.noteSave).toHaveBeenCalledWith("s1", "new");
     expect(useNotesStore.getState().dirtySavedById).toEqual({});
   });
+
+  it("saves all dirty notes", async () => {
+    const s1 = meta({ id: "s1", storage: "saved" });
+    const s2 = meta({ id: "s2", storage: "saved" });
+    apiMock.notesList.mockResolvedValue({ active: [s1, s2], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+    apiMock.noteGet.mockResolvedValueOnce({ meta: s1, content: "one" });
+    apiMock.noteGet.mockResolvedValueOnce({ meta: s2, content: "two" });
+    apiMock.noteSave.mockImplementation(async (id: string) => meta({ id, storage: "saved" }));
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    useNotesStore.getState().updateContent("s1", "one*");
+    useNotesStore.getState().updateContent("s2", "two*");
+
+    await useNotesStore.getState().saveAllDirty();
+    expect(apiMock.noteSave).toHaveBeenCalledWith("s1", "one*");
+    expect(apiMock.noteSave).toHaveBeenCalledWith("s2", "two*");
+    expect(useNotesStore.getState().dirtySavedById).toEqual({});
+  });
+
+  it("selects trashed notes and switches view mode", async () => {
+    const trashed = meta({ id: "t1", isTrashed: true });
+    apiMock.notesList.mockResolvedValue({ active: [], trashed: [trashed] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+    apiMock.noteGet.mockResolvedValue({ meta: trashed, content: "trash" });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+    await useNotesStore.getState().select("t1");
+
+    expect(useNotesStore.getState().viewMode).toBe("trash");
+  });
+
+  it("refreshes list", async () => {
+    const n1 = meta({ id: "n1" });
+    apiMock.notesList
+      .mockResolvedValueOnce({ active: [], trashed: [] })
+      .mockResolvedValueOnce({ active: [n1], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+    await useNotesStore.getState().refresh();
+
+    expect(useNotesStore.getState().list.active.map((n) => n.id)).toEqual(["n1"]);
+  });
+
+  it("clamps sidebar width and persists app state", async () => {
+    apiMock.notesList.mockResolvedValue({ active: [], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    useNotesStore.getState().setSidebarWidth(100);
+    expect(useNotesStore.getState().sidebarWidth).toBe(200);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(apiMock.appStateSet).toHaveBeenCalledWith("sidebarWidth", "200");
+
+    useNotesStore.getState().setSidebarWidth(500);
+    expect(useNotesStore.getState().sidebarWidth).toBe(400);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(apiMock.appStateSet).toHaveBeenCalledWith("sidebarWidth", "400");
+  });
+
+  it("sets view mode and persists app state", async () => {
+    apiMock.notesList.mockResolvedValue({ active: [], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    useNotesStore.getState().setViewMode("trash");
+    expect(useNotesStore.getState().viewMode).toBe("trash");
+    await vi.advanceTimersByTimeAsync(250);
+    expect(apiMock.appStateSet).toHaveBeenCalledWith("viewMode", "trash");
+  });
+
+  it("imports files and sets selection", async () => {
+    const imported = meta({ id: "i1" });
+    apiMock.notesList.mockResolvedValue({ active: [], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+    apiMock.noteImportFile.mockResolvedValue({ meta: imported, content: "hello" });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+    await useNotesStore.getState().importFile("/tmp/file.md");
+
+    expect(useNotesStore.getState().selectedId).toBe("i1");
+    expect(useNotesStore.getState().contentById.i1).toBe("hello");
+    expect(apiMock.noteSetActive).toHaveBeenCalledWith("i1");
+  });
+
+  it("trashes, restores, deletes and clears trash", async () => {
+    const active = meta({ id: "a1" });
+    const trashed = meta({ id: "t1", isTrashed: true });
+    apiMock.notesList.mockResolvedValue({ active: [active], trashed: [trashed] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+    apiMock.noteTrash.mockResolvedValue({ ...active, isTrashed: true });
+    apiMock.noteRestore.mockResolvedValue({ ...trashed, isTrashed: false });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    apiMock.noteDeleteForever.mockResolvedValue(undefined);
+    await useNotesStore.getState().clearTrash();
+    expect(apiMock.noteDeleteForever).toHaveBeenCalledWith("t1");
+    expect(useNotesStore.getState().list.trashed).toEqual([]);
+
+    await useNotesStore.getState().trash("a1");
+    expect(useNotesStore.getState().list.trashed.map((n) => n.id)).toContain("a1");
+
+    await useNotesStore.getState().restore("t1");
+    expect(useNotesStore.getState().viewMode).toBe("notes");
+
+    await useNotesStore.getState().deleteForever("a1");
+    expect(useNotesStore.getState().list.active.map((n) => n.id)).not.toContain("a1");
+  });
+
+  it("no-ops clearTrash when empty", async () => {
+    apiMock.notesList.mockResolvedValue({ active: [], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    await useNotesStore.getState().clearTrash();
+    expect(apiMock.noteDeleteForever).not.toHaveBeenCalled();
+  });
+
+  it("toggles pin", async () => {
+    const note = meta({ id: "p1", isPinned: false });
+    apiMock.notesList.mockResolvedValue({ active: [note], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+    apiMock.notePin.mockResolvedValue({ ...note, isPinned: true });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+    await useNotesStore.getState().togglePin("p1");
+
+    expect(useNotesStore.getState().list.active.find((n) => n.id === "p1")?.isPinned).toBe(true);
+  });
+
+  it("reorders and supports undo/redo", async () => {
+    const p1 = meta({ id: "p1", isPinned: true, sortOrder: 1 });
+    const p2 = meta({ id: "p2", isPinned: true, sortOrder: 2 });
+    const n1 = meta({ id: "n1", isPinned: false, sortOrder: 3 });
+    apiMock.notesList.mockResolvedValue({ active: [p1, p2, n1], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+    apiMock.notesReorder.mockResolvedValue(undefined);
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    await useNotesStore.getState().reorder("pinned", ["p2", "p1"]);
+    expect(apiMock.notesReorder).toHaveBeenCalledWith(["p2", "p1"]);
+
+    await useNotesStore.getState().undoReorder();
+    expect(apiMock.notesReorder).toHaveBeenCalledWith(["p1", "p2"]);
+
+    await useNotesStore.getState().redoReorder();
+    expect(apiMock.notesReorder).toHaveBeenCalledWith(["p2", "p1"]);
+  });
+
+  it("heartbeats selected and logs errors", async () => {
+    const note = meta({ id: "h1" });
+    apiMock.notesList.mockResolvedValue({ active: [note], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({ selectedNoteId: "h1" });
+    apiMock.noteGet.mockResolvedValue({ meta: note, content: "" });
+    apiMock.noteSetActive.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("nope"));
+
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    await useNotesStore.getState().heartbeatSelected();
+    expect(spy).toHaveBeenCalledWith("Heartbeat failed:", expect.any(Error));
+    spy.mockRestore();
+  });
 });

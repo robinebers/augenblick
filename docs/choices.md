@@ -13,3 +13,5 @@
 - shadcn base color: Neutral.
 - Tests: add Vitest + jsdom harness; port store tests for notes/settings parity.
 - Task lists: keep standard Markdown `- [ ]` / `- [x]`; no standalone `[ ]` auto-convert. Slash inserts standard task list item.
+- Coverage: enforce 80% global thresholds; exclude `src/components/**`, `src/app/**`, `src/features/editor/**`, entrypoints, assets, and tests from coverage scope.
+- Coverage provider: use `@vitest/coverage-v8@3.2.4` to match Vitest `3.2.4`.

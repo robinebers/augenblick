@@ -1,5 +1,8 @@
 import { vi } from "vitest";
 
+// React act warnings in tests.
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 // jsdom doesn't implement scrollIntoView; cmdk expects it.
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};

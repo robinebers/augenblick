@@ -50,7 +50,7 @@ function SortableRow({ note, selected, expiryMinutes, onSelect }: SortableRowPro
     id: note.id,
   });
 
-  const style = {
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.6 : 1,
@@ -58,7 +58,12 @@ function SortableRow({ note, selected, expiryMinutes, onSelect }: SortableRowPro
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <NoteItem note={note} selected={selected} expiryMinutes={expiryMinutes} onSelect={onSelect} />
+      <NoteItem 
+        note={note} 
+        selected={selected} 
+        expiryMinutes={expiryMinutes} 
+        onSelect={onSelect}
+      />
     </div>
   );
 }

@@ -9,6 +9,11 @@ import { history } from "@milkdown/plugin-history";
 import { blockSpec, block, BlockProvider } from "@milkdown/kit/plugin/block";
 import { SlashProvider, slashFactory } from "@milkdown/kit/plugin/slash";
 import { TooltipProvider, tooltipFactory } from "@milkdown/kit/plugin/tooltip";
+import {
+  linkTooltipPlugin,
+  configureLinkTooltip,
+  linkTooltipConfig,
+} from "@milkdown/kit/component/link-tooltip";
 import { nord } from "@milkdown/theme-nord";
 import type { Node as ProseNode } from "@milkdown/prose/model";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
@@ -36,6 +41,7 @@ import markdown from "refractor/lang/markdown.js";
 import tsx from "refractor/lang/tsx.js";
 import typescript from "refractor/lang/typescript.js";
 import { Icon } from "@/components/icons/Icon";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 type Props = {
   value: string;
@@ -59,7 +65,6 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
   const [replaceWith, setReplaceWith] = useState("");
   const [matches, setMatches] = useState<Match[]>([]);
   const [cursor, setCursor] = useState(0);
-  const [isEmpty, setIsEmpty] = useState(value.trim().length === 0);
 
   const showFindRef = useRef(false);
   const queryRef = useRef("");
@@ -533,6 +538,7 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
     `;
 
     const p = MilkEditor.make()
+      .config(configureLinkTooltip)
       .config((ctx) => {
         ctx.set(rootCtx, node);
         ctx.set(defaultValueCtx, value);
@@ -547,10 +553,27 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
           },
         });
 
+        // Configure link tooltip
+        ctx.update(linkTooltipConfig.key, (cfg) => ({
+          ...cfg,
+          linkIcon: "↗",
+          editButton: "✎",
+          removeButton: "✕",
+          confirmButton: "✓",
+          onCopyLink: (link: string) => {
+            // Open the link externally when clicking the link icon
+            if (link.startsWith("http://") || link.startsWith("https://")) {
+              openUrl(link).catch(console.error);
+            } else {
+              // Fall back to copy for non-http links
+              navigator.clipboard.writeText(link);
+            }
+          },
+        }));
+
         const l = ctx.get(listenerCtx);
         l.markdownUpdated((_ctx, markdown, prevMarkdown) => {
           lastMarkdownRef.current = markdown;
-          setIsEmpty(markdown.trim().length === 0);
           if (!readOnlyRef.current && markdown !== prevMarkdown) onChangeRef.current(markdown);
           if (showFindRef.current) refreshMatches();
         });
@@ -693,6 +716,7 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
       .use(block)
       .use(slash)
       .use(selectionToolbar)
+      .use(linkTooltipPlugin)
       .use(imageBlockComponent)
       .use(tableBlock)
       .create();
@@ -748,24 +772,29 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
       if (!view || !queryRef.current) return;
       selectPrevFrom(view.state.selection.from);
     });
+    const onFocusEditor = run(async () => {
+      const view = await ensureView();
+      view?.focus();
+    });
 
     window.addEventListener("augenblick:find", onFind);
     window.addEventListener("augenblick:replace", onReplace);
     window.addEventListener("augenblick:find-next", onFindNext);
     window.addEventListener("augenblick:find-prev", onFindPrev);
+    window.addEventListener("augenblick:focus-editor", onFocusEditor);
 
     return () => {
       window.removeEventListener("augenblick:find", onFind);
       window.removeEventListener("augenblick:replace", onReplace);
       window.removeEventListener("augenblick:find-next", onFindNext);
       window.removeEventListener("augenblick:find-prev", onFindPrev);
+      window.removeEventListener("augenblick:focus-editor", onFocusEditor);
     };
   }, [ensureView, openFindBar, refreshMatches, selectNextFrom, selectPrevFrom]);
 
   useEffect(() => {
     if (value === lastMarkdownRef.current) return;
     lastMarkdownRef.current = value;
-    setIsEmpty(value.trim().length === 0);
     const p = editorPromiseRef.current;
     if (!p) return;
     void p.then((editor) => {
@@ -890,15 +919,7 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
           </div>
         ) : null}
 
-        <div className="relative flex-1">
-          {isEmpty ? (
-            <div
-              className="pointer-events-none absolute left-0 top-0 text-[15px]"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              Start writing...
-            </div>
-          ) : null}
+        <div className="flex-1">
           <div ref={containerRef} className="h-full" />
         </div>
       </div>

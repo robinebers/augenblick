@@ -202,6 +202,11 @@ export const useNotesStore = create<NotesState>((set, get) => ({
 
     scheduleAppStateWrite(get);
     await api.noteSetActive(meta.id);
+
+    // Focus the editor after creating a new note
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent("augenblick:focus-editor"));
+    });
   },
   select: async (id) => {
     const before = get();
