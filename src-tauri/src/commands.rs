@@ -147,7 +147,7 @@ pub fn settings_get_all(state: State<'_, AppState>) -> Result<AppSettings, Strin
         .lock()
         .map_err(|_| "DB lock poisoned".to_string())?;
     Ok(AppSettings {
-        expiry_days: get_setting_int(&conn, "expiry_days", 7)?,
+        expiry_minutes: get_setting_int(&conn, "expiry_minutes", 10_080)?,
         trash_retention_days: get_setting_int(&conn, "trash_retention_days", 30)?,
         theme: get_setting_string(&conn, "theme", "dark")?,
     })

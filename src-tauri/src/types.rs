@@ -40,7 +40,7 @@ pub struct NoteWithContent {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
-    pub expiry_days: i64,
+    pub expiry_minutes: i64,
     pub trash_retention_days: i64,
     pub theme: String,
 }

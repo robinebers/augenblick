@@ -9,7 +9,7 @@ type WebDb = {
 const STORAGE_KEY = "augenblick:webdb:v1";
 
 const DEFAULT_SETTINGS: AppSettings = {
-  expiryDays: 7,
+  expiryMinutes: 10_080,
   trashRetentionDays: 30,
   theme: "dark",
 };
@@ -57,7 +57,7 @@ function loadDb(): WebDb {
     return {
       notes: parsed.notes ?? {},
       appState: parsed.appState ?? {},
-      settings: parsed.settings ?? DEFAULT_SETTINGS,
+      settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
     };
   } catch {
     return { notes: {}, appState: {}, settings: DEFAULT_SETTINGS };
@@ -253,16 +253,16 @@ async function invokeWeb(cmd: string, args: Record<string, unknown> | undefined)
       return;
     }
     case "settings_get_all": {
-      return db.settings ?? DEFAULT_SETTINGS;
+      return { ...DEFAULT_SETTINGS, ...(db.settings ?? {}) };
     }
     case "settings_set": {
       const key = String(args?.key ?? "");
       const value = String(args?.value ?? "");
-      const next: AppSettings = { ...(db.settings ?? DEFAULT_SETTINGS) };
+      const next: AppSettings = { ...DEFAULT_SETTINGS, ...(db.settings ?? {}) };
       if (key === "theme" && (value === "dark" || value === "light" || value === "system")) {
         next.theme = value;
-      } else if (key === "expiry_days") {
-        next.expiryDays = Number(value) || next.expiryDays;
+      } else if (key === "expiry_minutes") {
+        next.expiryMinutes = Number(value) || next.expiryMinutes;
       } else if (key === "trash_retention_days") {
         next.trashRetentionDays = Number(value) || next.trashRetentionDays;
       }
@@ -281,8 +281,8 @@ async function invokeWeb(cmd: string, args: Record<string, unknown> | undefined)
       return;
     }
     case "expiry_run_now": {
-      const expiryDays = db.settings?.expiryDays ?? DEFAULT_SETTINGS.expiryDays;
-      const cutoff = now() - Math.max(1, expiryDays) * 86_400_000;
+      const expiryMinutes = db.settings?.expiryMinutes ?? DEFAULT_SETTINGS.expiryMinutes;
+      const cutoff = now() - Math.max(1, expiryMinutes) * 60_000;
       for (const entry of Object.values(db.notes)) {
         if (entry.meta.isTrashed) continue;
         if (entry.meta.isPinned) continue;

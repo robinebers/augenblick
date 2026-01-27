@@ -26,7 +26,7 @@ type Props = {
   notes: NoteMeta[];
   trashed: NoteMeta[];
   selectedId: string | null;
-  expiryDays: number;
+  expiryMinutes: number;
   trashRetentionDays: number;
   viewMode: "notes" | "trash";
   onSelect: (id: string) => void;
@@ -41,11 +41,11 @@ type Props = {
 type SortableRowProps = {
   note: NoteMeta;
   selected: boolean;
-  expiryDays: number;
+  expiryMinutes: number;
   onSelect: (id: string) => void;
 };
 
-function SortableRow({ note, selected, expiryDays, onSelect }: SortableRowProps) {
+function SortableRow({ note, selected, expiryMinutes, onSelect }: SortableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: note.id,
   });
@@ -58,7 +58,7 @@ function SortableRow({ note, selected, expiryDays, onSelect }: SortableRowProps)
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <NoteItem note={note} selected={selected} expiryDays={expiryDays} onSelect={onSelect} />
+      <NoteItem note={note} selected={selected} expiryMinutes={expiryMinutes} onSelect={onSelect} />
     </div>
   );
 }
@@ -122,7 +122,7 @@ export function Sidebar({
   notes,
   trashed,
   selectedId,
-  expiryDays,
+  expiryMinutes,
   trashRetentionDays,
   viewMode,
   onSelect,
@@ -178,7 +178,7 @@ export function Sidebar({
                           <SortableRow
                             note={note}
                             selected={note.id === selectedId}
-                            expiryDays={expiryDays}
+                            expiryMinutes={expiryMinutes}
                             onSelect={onSelect}
                           />
                         </div>
@@ -221,7 +221,7 @@ export function Sidebar({
                       <SortableRow
                         note={note}
                         selected={note.id === selectedId}
-                        expiryDays={expiryDays}
+                        expiryMinutes={expiryMinutes}
                         onSelect={onSelect}
                       />
                     </div>

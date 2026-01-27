@@ -42,7 +42,7 @@ function App() {
   const sidebarWidth = useNotesStore((s) => s.sidebarWidth);
   const contentById = useNotesStore((s) => s.contentById);
 
-  const expiryDays = useSettingsStore((s) => s.expiryDays);
+  const expiryMinutes = useSettingsStore((s) => s.expiryMinutes);
   const trashRetentionDays = useSettingsStore((s) => s.trashRetentionDays);
   const theme = useSettingsStore((s) => s.theme);
 
@@ -273,7 +273,7 @@ function App() {
               notes={notes}
               trashed={trashed}
               selectedId={selectedId}
-              expiryDays={expiryDays}
+              expiryMinutes={expiryMinutes}
               trashRetentionDays={trashRetentionDays}
               viewMode={viewMode}
               onSelect={(id) => void runOrAlert(() => useNotesStore.getState().select(id))}
@@ -380,10 +380,12 @@ function App() {
 
         {showSettings ? (
           <SettingsDialog
-            settings={{ expiryDays, trashRetentionDays, theme }}
+            settings={{ expiryMinutes, trashRetentionDays, theme }}
             onClose={() => setShowSettings(false)}
             onTheme={(theme) => void runOrAlert(() => useSettingsStore.getState().setTheme(theme))}
-            onExpiryDays={(days) => void runOrAlert(() => useSettingsStore.getState().setExpiryDays(days))}
+            onExpiryMinutes={(minutes) =>
+              void runOrAlert(() => useSettingsStore.getState().setExpiryMinutes(minutes))
+            }
             onTrashDays={(days) => void runOrAlert(() => useSettingsStore.getState().setTrashRetentionDays(days))}
           />
         ) : null}

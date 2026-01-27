@@ -5,10 +5,10 @@ import { formatRelativeTimeFromNow } from "@/lib/utils/time";
 
 type Props = {
   lastInteraction: number;
-  expiryDays: number;
+  expiryMinutes: number;
 };
 
-export function ExpiryRing({ lastInteraction, expiryDays }: Props) {
+export function ExpiryRing({ lastInteraction, expiryMinutes }: Props) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export function ExpiryRing({ lastInteraction, expiryDays }: Props) {
 
   const r = 8;
   const circumference = 2 * Math.PI * r;
-  const progress = expiryProgress(lastInteraction, expiryDays, now);
+  const progress = expiryProgress(lastInteraction, expiryMinutes, now);
   const dashOffset = circumference * (1 - progress);
   const status = expiryStatus(progress);
   const stroke =
@@ -31,8 +31,8 @@ export function ExpiryRing({ lastInteraction, expiryDays }: Props) {
           : "var(--ring-red)";
 
   const expiryAt = useMemo(
-    () => lastInteraction + Math.max(1, expiryDays) * 86_400_000,
-    [lastInteraction, expiryDays],
+    () => lastInteraction + Math.max(1, expiryMinutes) * 60_000,
+    [lastInteraction, expiryMinutes],
   );
   const tooltipText = `Trashed ${formatRelativeTimeFromNow(expiryAt, now)}`;
 

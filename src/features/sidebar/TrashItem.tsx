@@ -35,8 +35,8 @@ export function TrashItem({
 
   return (
     <div
-      className={`group flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-[13px] text-[var(--text-primary)] ${
-        selected ? "bg-[var(--bg-tertiary)]" : "hover:bg-[var(--bg-tertiary)]"
+      className={`group flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-[13px] text-foreground transition-colors ${
+        selected ? "bg-secondary" : "hover:bg-muted active:bg-secondary"
       }`}
       role="button"
       tabIndex={0}
@@ -50,7 +50,7 @@ export function TrashItem({
     >
       <div className="min-w-0 flex-1">
         <div className="truncate font-semibold">{note.title}</div>
-        <div className="truncate text-[11px] text-[var(--text-secondary)]">
+        <div className="truncate text-[11px] text-muted-foreground">
           Deletes {timeLeft}
         </div>
       </div>
@@ -58,7 +58,7 @@ export function TrashItem({
       <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           type="button"
-          className="rounded-md p-1 text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
+          className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Restore"
           onClick={(e) => {
             e.stopPropagation();
@@ -69,7 +69,7 @@ export function TrashItem({
         </button>
         <button
           type="button"
-          className="rounded-md p-1 text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--ring-red)]"
+          className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
           aria-label="Delete forever"
           onClick={(e) => {
             e.stopPropagation();

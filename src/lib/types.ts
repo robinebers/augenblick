@@ -25,7 +25,7 @@ export type NoteWithContent = {
 };
 
 export type AppSettings = {
-  expiryDays: number;
+  expiryMinutes: number;
   trashRetentionDays: number;
   theme: "dark" | "light" | "system";
 };

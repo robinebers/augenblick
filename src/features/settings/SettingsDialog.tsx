@@ -13,12 +13,20 @@ type Props = {
   settings: AppSettings;
   onClose: () => void;
   onTheme: (theme: AppSettings["theme"]) => void;
-  onExpiryDays: (days: number) => void;
+  onExpiryMinutes: (minutes: number) => void;
   onTrashDays: (days: number) => void;
 };
 
-export function SettingsDialog({ settings, onClose, onTheme, onExpiryDays, onTrashDays }: Props) {
-  const expiryOptions = [1, 3, 7, 14, 30];
+export function SettingsDialog({ settings, onClose, onTheme, onExpiryMinutes, onTrashDays }: Props) {
+  const expiryOptions = [
+    { minutes: 360, label: "6 hours" },
+    { minutes: 720, label: "12 hours" },
+    { minutes: 1440, label: "1 day" },
+    { minutes: 4320, label: "3 days" },
+    { minutes: 10_080, label: "7 days" },
+    { minutes: 20_160, label: "14 days" },
+    { minutes: 43_200, label: "30 days" },
+  ];
   const trashOptions = [7, 14, 30, 60, 90];
 
   return (
@@ -52,14 +60,17 @@ export function SettingsDialog({ settings, onClose, onTheme, onExpiryDays, onTra
 
           <div>
             <div className="mb-2 text-sm font-medium">Note Expiry</div>
-            <Select value={String(settings.expiryDays)} onValueChange={(v) => onExpiryDays(Number(v))}>
+            <Select
+              value={String(settings.expiryMinutes)}
+              onValueChange={(v) => onExpiryMinutes(Number(v))}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {expiryOptions.map((d) => (
-                  <SelectItem key={d} value={String(d)}>
-                    {d} days
+                {expiryOptions.map((option) => (
+                  <SelectItem key={option.minutes} value={String(option.minutes)}>
+                    {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>

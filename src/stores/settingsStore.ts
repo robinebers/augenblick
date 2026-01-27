@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import type { AppSettings } from "@/lib/types";
 
 const DEFAULT_SETTINGS: AppSettings = {
-  expiryDays: 7,
+  expiryMinutes: 10_080,
   trashRetentionDays: 30,
   theme: "dark",
 };
@@ -47,7 +47,7 @@ type SettingsState = AppSettings & {
   initialized: boolean;
   init: () => Promise<void>;
   setTheme: (theme: AppSettings["theme"]) => Promise<void>;
-  setExpiryDays: (days: number) => Promise<void>;
+  setExpiryMinutes: (minutes: number) => Promise<void>;
   setTrashRetentionDays: (days: number) => Promise<void>;
 };
 
@@ -65,9 +65,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     applyTheme(theme);
     await api.settingsSet("theme", theme);
   },
-  setExpiryDays: async (expiryDays) => {
-    set((s) => ({ ...s, expiryDays }));
-    await api.settingsSet("expiry_days", String(expiryDays));
+  setExpiryMinutes: async (expiryMinutes) => {
+    set((s) => ({ ...s, expiryMinutes }));
+    await api.settingsSet("expiry_minutes", String(expiryMinutes));
   },
   setTrashRetentionDays: async (trashRetentionDays) => {
     set((s) => ({ ...s, trashRetentionDays }));

@@ -17,7 +17,7 @@ describe("settingsStore", () => {
 
   it("initializes once and applies theme", async () => {
     apiMock.settingsGetAll.mockResolvedValue({
-      expiryDays: 7,
+      expiryMinutes: 10_080,
       trashRetentionDays: 30,
       theme: "light",
     });
@@ -34,7 +34,7 @@ describe("settingsStore", () => {
 
   it("switches themes and persists", async () => {
     apiMock.settingsGetAll.mockResolvedValue({
-      expiryDays: 7,
+      expiryMinutes: 10_080,
       trashRetentionDays: 30,
       theme: "dark",
     });
@@ -61,7 +61,7 @@ describe("settingsStore", () => {
     });
 
     apiMock.settingsGetAll.mockResolvedValue({
-      expiryDays: 7,
+      expiryMinutes: 10_080,
       trashRetentionDays: 30,
       theme: "system",
     });
@@ -86,7 +86,7 @@ describe("settingsStore", () => {
     });
 
     apiMock.settingsGetAll.mockResolvedValue({
-      expiryDays: 7,
+      expiryMinutes: 10_080,
       trashRetentionDays: 30,
       theme: "dark",
     });
@@ -117,7 +117,7 @@ describe("settingsStore", () => {
     });
 
     apiMock.settingsGetAll.mockResolvedValue({
-      expiryDays: 7,
+      expiryMinutes: 10_080,
       trashRetentionDays: 30,
       theme: "system",
     });
@@ -136,7 +136,7 @@ describe("settingsStore", () => {
 
   it("persists expiry + trash settings", async () => {
     apiMock.settingsGetAll.mockResolvedValue({
-      expiryDays: 7,
+      expiryMinutes: 10_080,
       trashRetentionDays: 30,
       theme: "dark",
     });
@@ -144,8 +144,8 @@ describe("settingsStore", () => {
     const { useSettingsStore } = await import("@/stores/settingsStore");
     await useSettingsStore.getState().init();
 
-    await useSettingsStore.getState().setExpiryDays(14);
-    expect(apiMock.settingsSet).toHaveBeenCalledWith("expiry_days", "14");
+    await useSettingsStore.getState().setExpiryMinutes(720);
+    expect(apiMock.settingsSet).toHaveBeenCalledWith("expiry_minutes", "720");
 
     await useSettingsStore.getState().setTrashRetentionDays(60);
     expect(apiMock.settingsSet).toHaveBeenCalledWith("trash_retention_days", "60");

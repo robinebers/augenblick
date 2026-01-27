@@ -2,10 +2,10 @@ export type ExpiryStatus = "fresh" | "aging" | "warning" | "danger";
 
 export function expiryProgress(
   lastInteractionMs: number,
-  expiryDays: number,
+  expiryMinutes: number,
   nowMs = Date.now(),
 ): number {
-  const totalMs = Math.max(1, expiryDays) * 86_400_000;
+  const totalMs = Math.max(1, expiryMinutes) * 60_000;
   const elapsed = Math.max(0, nowMs - lastInteractionMs);
   return clamp01(1 - elapsed / totalMs);
 }

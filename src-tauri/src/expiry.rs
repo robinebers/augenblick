@@ -15,17 +15,17 @@ pub fn start_background_sweeper(state: AppState) {
 
 pub fn sweep(state: &AppState) -> Result<(), String> {
     let now = notes::now_ms();
-    let (expiry_days, trash_days) = {
+    let (expiry_minutes, trash_days) = {
         let conn = state
             .db
             .lock()
             .map_err(|_| "DB lock poisoned".to_string())?;
-        let expiry_days = get_int_setting(&conn, "expiry_days", 7)?;
+        let expiry_minutes = get_int_setting(&conn, "expiry_minutes", 10_080)?;
         let trash_days = get_int_setting(&conn, "trash_retention_days", 30)?;
-        (expiry_days, trash_days)
+        (expiry_minutes, trash_days)
     };
 
-    let expiry_ms = expiry_days * 86_400_000;
+    let expiry_ms = expiry_minutes * 60_000;
     let trash_ms = trash_days * 86_400_000;
 
     {
