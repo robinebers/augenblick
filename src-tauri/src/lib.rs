@@ -18,6 +18,7 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let app_handle = app.handle().clone();
             let state = AppState::init(&app_handle).map_err(std::io::Error::other)?;

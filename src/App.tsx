@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { check } from "@tauri-apps/plugin-updater";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
@@ -35,6 +36,7 @@ const LazyTrashPreview = lazy(() =>
 function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
 
   const list = useNotesStore((s) => s.list);
   const selectedId = useNotesStore((s) => s.selectedId);
@@ -80,6 +82,27 @@ function App() {
       toast.error("Error", { description: String(err) });
     }
   }, []);
+
+  const handleCheckUpdates = useCallback(() => {
+    if (isCheckingUpdates) return;
+
+    void runOrAlert(async () => {
+      setIsCheckingUpdates(true);
+      try {
+        const update = await check();
+        if (!update) {
+          toast.success("You're up to date.");
+          return;
+        }
+
+        toast.success(`Update available: ${update.version}`);
+        await update.downloadAndInstall({ restart: true });
+        toast.success("Update installed. Restarting…");
+      } finally {
+        setIsCheckingUpdates(false);
+      }
+    });
+  }, [isCheckingUpdates, runOrAlert]);
 
   const actions = useMemo(() => {
     const notesStore = useNotesStore.getState();
@@ -387,6 +410,8 @@ function App() {
               void runOrAlert(() => useSettingsStore.getState().setExpiryMinutes(minutes))
             }
             onTrashDays={(days) => void runOrAlert(() => useSettingsStore.getState().setTrashRetentionDays(days))}
+            isCheckingUpdates={isCheckingUpdates}
+            onCheckUpdates={handleCheckUpdates}
           />
         ) : null}
         </div>
