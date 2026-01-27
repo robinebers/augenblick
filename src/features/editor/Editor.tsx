@@ -374,6 +374,22 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
             }),
         },
         {
+          id: "task",
+          label: "Task List",
+          keywords: ["task", "todo", "checkbox", "list"],
+          run: () =>
+            runEditorAction((editor) => {
+              deleteSlashTrigger(v, provider);
+              editor.action((ctx) => {
+                const view = ctx.get(editorViewCtx);
+                const slice = markdownToSlice("- [ ] ")(ctx);
+                if (!slice) return;
+                view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+                view.focus();
+              });
+            }),
+        },
+        {
           id: "ordered",
           label: "Numbered List",
           keywords: ["list", "ordered", "1."],
@@ -653,7 +669,7 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
                 const li = target?.closest?.("li[data-item-type='task']");
                 if (!li) return false;
                 const rect = li.getBoundingClientRect();
-                const hit = event.clientX - rect.left <= 22;
+                const hit = event.clientX - rect.left <= 24;
                 if (!hit) return false;
                 const pos = view.posAtDOM(li, 0);
                 if (pos == null) return false;

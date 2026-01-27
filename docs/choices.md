@@ -12,3 +12,4 @@
 - Plan docs: keep `plans/migration.md` as index; detailed parity spec lives in `plans/migration.inventory.md` + `plans/migration.editor.md`; QA lives in `plans/migration.qa.md` (file size guardrail).
 - shadcn base color: Neutral.
 - Tests: add Vitest + jsdom harness; port store tests for notes/settings parity.
+- Task lists: keep standard Markdown `- [ ]` / `- [x]`; no standalone `[ ]` auto-convert. Slash inserts standard task list item.

@@ -292,7 +292,7 @@ function App() {
             }}
           />
 
-          <div className="flex-1 h-full">
+          <div className="flex-1 h-full" style={{ background: "var(--bg-primary)" }}>
             {shouldShowSelection ? (
               selectedLoaded ? (
                 selectedIsTrashed ? (

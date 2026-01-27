@@ -190,7 +190,7 @@ body {
 .ProseMirror li[data-item-type="task"] {
   position: relative;
   list-style: none;
-  padding-left: 1.6em;
+  padding-left: 2em;
 }
 
 .milkdown li[data-item-type="task"]::before,
@@ -198,10 +198,10 @@ body {
   content: "";
   position: absolute;
   left: 0;
-  top: 0.35em;
-  width: 0.9em;
-  height: 0.9em;
-  border-radius: 4px;
+  top: 0.3em;
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 5px;
   border: 1px solid var(--border-default);
   background: var(--bg-secondary);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 5%, transparent);
@@ -218,10 +218,10 @@ body {
 .ProseMirror li[data-item-type="task"][data-checked="true"]::after {
   content: "";
   position: absolute;
-  left: 0.26em;
-  top: 0.58em;
-  width: 0.38em;
-  height: 0.2em;
+  left: 0.33em;
+  top: 0.62em;
+  width: 0.48em;
+  height: 0.24em;
   border-left: 2px solid #fff;
   border-bottom: 2px solid #fff;
   transform: rotate(-45deg);
