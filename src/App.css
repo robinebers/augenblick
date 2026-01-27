@@ -585,15 +585,15 @@ body {
 }
 
 .note-item-btn:not([data-selected]):hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .note-item-btn:not([data-selected]):active {
-  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 .note-item-btn[data-selected="true"] {
-  background: var(--secondary);
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 /* Link tooltip styles */
