@@ -89,4 +89,4 @@ Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 ## User Notes
 Use below list to store and recall user notes when asked to do so.
 
-- (Replace this one when asked for first note)
+- Dialog backgrounds missing when Tailwind v4 `@theme inline` tokens lacked `hsl()`; fix by wrapping `--color-*` with `hsl(var(--...))`.
