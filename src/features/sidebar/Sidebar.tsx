@@ -145,7 +145,7 @@ export function Sidebar({
       className="flex h-full flex-col select-none"
       style={{ background: "var(--bg-secondary)", borderRight: "1px solid var(--border-default)" }}
     >
-      <div className="flex-1 overflow-auto px-1.5" style={{ paddingTop: "var(--titlebar-inset, 0px)" }}>
+      <div className="flex-1 overflow-auto px-1.5 pb-2" style={{ paddingTop: "var(--titlebar-inset, 0px)" }}>
         {viewMode === "notes" ? (
           <>
             {pinned.length > 0 ? (

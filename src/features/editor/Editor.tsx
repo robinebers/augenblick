@@ -77,9 +77,6 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
     onChangeRef.current = onChange;
   }, [onChange]);
 
-  useEffect(() => {
-    setIsEmpty(value.trim().length === 0);
-  }, [value]);
 
   useEffect(() => {
     showFindRef.current = showFind;
@@ -768,6 +765,7 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
   useEffect(() => {
     if (value === lastMarkdownRef.current) return;
     lastMarkdownRef.current = value;
+    setIsEmpty(value.trim().length === 0);
     const p = editorPromiseRef.current;
     if (!p) return;
     void p.then((editor) => {

@@ -5,6 +5,16 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
 import { AppShell } from "@/app/AppShell";
 import { ErrorBoundary } from "@/app/ErrorBoundary";
+import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Spinner } from "@/components/ui/spinner";
 import { Icon } from "@/components/icons/Icon";
 import { Sidebar } from "@/features/sidebar/Sidebar";
 import { CommandPalette } from "@/features/command/CommandPalette";
@@ -305,25 +315,47 @@ function App() {
                   </Suspense>
                 )
               ) : (
-                <div className="flex h-full items-center justify-center text-center">
-                  <div className="text-[13px] text-[var(--text-secondary)]">Loading note…</div>
+                <div className="flex h-full items-center justify-center gap-2">
+                  <Spinner className="size-4 text-[var(--text-secondary)]" />
+                  <span className="text-[13px] text-[var(--text-secondary)]">Loading note…</span>
                 </div>
               )
-            ) : viewMode === "trash" && trashed.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-center">
-                <div className="text-[13px] text-[var(--text-secondary)]">Trash is empty</div>
-              </div>
+            ) : viewMode === "trash" ? (
+              <Empty className="h-full border-none">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Icon name="trash" />
+                  </EmptyMedia>
+                  <EmptyTitle>{trashed.length === 0 ? "Trash is empty" : "Select a note"}</EmptyTitle>
+                  <EmptyDescription>
+                    {trashed.length === 0
+                      ? "Deleted notes will appear here"
+                      : "Select a note to preview before restoring or deleting"}
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
-              <div className="flex h-full items-center justify-center text-center">
-                <div>
-                  <div className="flex justify-center text-[var(--text-tertiary)]">
-                    <Icon name="file-text" size={40} />
+              <Empty className="h-full border-none">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Icon name="file-text" />
+                  </EmptyMedia>
+                  <EmptyTitle>No note selected</EmptyTitle>
+                  <EmptyDescription>
+                    Create a new note or open an existing file
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <div className="flex gap-2">
+                    <Button onClick={() => void runOrAlert(() => useNotesStore.getState().createNote())}>
+                      New Note
+                    </Button>
+                    <Button variant="outline" onClick={() => void runOrAlert(() => actions.openMarkdown())}>
+                      Open File
+                    </Button>
                   </div>
-                  <div className="mt-3 text-[13px] text-[var(--text-secondary)]">
-                    Press ⌘N to create a note
-                  </div>
-                </div>
-              </div>
+                </EmptyContent>
+              </Empty>
             )}
           </div>
         </div>

@@ -14,7 +14,14 @@ pub(super) fn derive_title_preview(content: &str) -> (String, String) {
 }
 
 fn sanitize_heading(line: &str) -> String {
-    line.trim_start_matches(&['#', '-', '>', '*'][..])
+    let trimmed = line.trim_start();
+    if let Some(rest) = trimmed.strip_prefix('\\') {
+        if rest.starts_with(['#', '-', '>', '*']) {
+            return rest.trim().to_string();
+        }
+    }
+    trimmed
+        .trim_start_matches(&['#', '-', '>', '*'][..])
         .trim()
         .to_string()
 }

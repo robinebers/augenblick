@@ -28,7 +28,14 @@ function deriveTitlePreview(content: string): Pick<NoteMeta, "title" | "preview"
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
   const first = lines[0] ?? "";
-  const sanitize = (line: string) => line.replace(/^[#\\-\\>\\*\\s]+/, "").trim();
+  const sanitize = (line: string) => {
+    const trimmed = line.trimStart();
+    const next = trimmed[1];
+    if (trimmed.startsWith("\\") && next && "#->*".includes(next)) {
+      return trimmed.slice(1).trim();
+    }
+    return trimmed.replace(/^[#>\-*\\s]+/, "").trim();
+  };
   const truncate = (s: string, maxLen: number) => (s.length <= maxLen ? s : s.slice(0, maxLen));
 
   const titleRaw = sanitize(first);
