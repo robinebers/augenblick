@@ -4,10 +4,16 @@ import { render } from "@/test/utils/render";
 
 const downloadAndInstall = vi.fn(async () => {});
 const check = vi.fn(async () => ({ version: "0.1.1", downloadAndInstall }));
+const relaunch = vi.fn(async () => {});
 
 let lastOnCheckUpdates: (() => void) | null = null;
+let lastRestartAction: (() => void) | null = null;
+
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
 
 vi.mock("@tauri-apps/plugin-updater", () => ({ check }));
+vi.mock("@tauri-apps/plugin-process", () => ({ relaunch }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(async () => null),
   save: vi.fn(async () => null),
@@ -32,6 +38,20 @@ vi.mock("@/features/settings/SettingsDialog", () => ({
   SettingsDialog: (props: any) => {
     lastOnCheckUpdates = props.onCheckUpdates;
     return <button onClick={props.onCheckUpdates}>Check for updates</button>;
+  },
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: (message: any, options?: any) => {
+      toastSuccess(message, options);
+      if (options?.action?.onClick) {
+        lastRestartAction = options.action.onClick;
+      }
+    },
+    error: (message: any, options?: any) => {
+      toastError(message, options);
+    },
   },
 }));
 
@@ -88,11 +108,15 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe("App updater", () => {
   beforeEach(() => {
     lastOnCheckUpdates = null;
+    lastRestartAction = null;
     downloadAndInstall.mockClear();
     check.mockClear();
+    relaunch.mockClear();
+    toastSuccess.mockClear();
+    toastError.mockClear();
   });
 
-  it("passes restart option when installing an update", async () => {
+  it("checks for updates when manual check is triggered", async () => {
     const App = (await import("@/App")).default;
     const { unmount } = await render(React.createElement(App));
 
@@ -112,8 +136,44 @@ describe("App updater", () => {
       await flush();
     });
 
+    // Manual check should call the updater check function
     expect(check).toHaveBeenCalled();
-    expect(downloadAndInstall).toHaveBeenCalledWith({ restart: true });
+    expect(downloadAndInstall).toHaveBeenCalled();
+    expect(typeof lastRestartAction).toBe("function");
+    expect(relaunch).not.toHaveBeenCalled();
+
+    await unmount();
+  });
+
+  it("calls relaunch after downloadAndInstall completes", async () => {
+    const App = (await import("@/App")).default;
+    const { unmount } = await render(React.createElement(App));
+
+    await act(async () => {
+      await flush();
+    });
+
+    await act(async () => {
+      (globalThis as any).__TAURI_EMIT__("menu-settings");
+      await flush();
+    });
+
+    expect(typeof lastOnCheckUpdates).toBe("function");
+
+    await act(async () => {
+      lastOnCheckUpdates?.();
+      await flush();
+    });
+
+    expect(downloadAndInstall).toHaveBeenCalled();
+    expect(typeof lastRestartAction).toBe("function");
+
+    await act(async () => {
+      lastRestartAction?.();
+      await flush();
+    });
+
+    expect(relaunch).toHaveBeenCalled();
 
     await unmount();
   });

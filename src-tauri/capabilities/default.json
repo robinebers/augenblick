@@ -9,6 +9,7 @@
     "core:window:allow-toggle-maximize",
     "dialog:default",
     "opener:default",
-    "updater:default"
+    "updater:default",
+    "process:allow-restart"
   ]
 }
