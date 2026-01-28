@@ -41,7 +41,7 @@ export function AppShell({ children }: Props) {
       ) : null}
       {children}
       <DialogHost />
-      <Toaster position="bottom-right" expand richColors closeButton />
+      <Toaster position="bottom-right" closeButton />
     </>
   );
 }
