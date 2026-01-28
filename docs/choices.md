@@ -17,6 +17,7 @@
 - Coverage provider: use `@vitest/coverage-v8@3.2.4` to match Vitest `3.2.4`.
 
 ## 2026-01-28
+- Branch: `robinebers/macos-auto-update` for GH release/updater fixes.
 - Editor markdown IO: `@tiptap/markdown` with `contentType: "markdown"`, GFM enabled, 2-space indentation.
 - Links: `openOnClick: false` to prevent in-app navigation.
 - Links: open on Cmd/Ctrl-click via editor `handleClick`.
