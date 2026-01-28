@@ -18,6 +18,9 @@ jobs:
   publish:
     strategy:
       fail-fast: false
+      # Avoid race overwriting `latest.json` across macOS targets.
+      # `tauri-action` merges platforms from an existing `latest.json`, so serial runs accumulate entries.
+      max-parallel: 1
       matrix:
         include:
           - platform: macos-latest
@@ -50,7 +53,7 @@ jobs:
             echo "Missing RELEASE_TAG (push a v* tag, or provide workflow_dispatch input 'tag')."
             exit 1
           fi
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid RELEASE_TAG: $RELEASE_TAG (expected vMAJOR.MINOR.PATCH)"
             exit 1
           fi
