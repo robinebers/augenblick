@@ -272,9 +272,8 @@ function App() {
       });
 
       unlistenClose = await getCurrentWindow().onCloseRequested(async (event) => {
-        if (isClosing) return;
-
         event.preventDefault();
+        if (isClosing) return;
         isClosing = true;
         try {
           const shouldHide = await confirmUnsaved("Hide Augenblick?");

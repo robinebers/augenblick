@@ -137,7 +137,7 @@ pub fn run() {
                     return;
                 }
 
-                if let Some(note_id) = id.strip_prefix("tray_note:") {
+                if let Some(note_id) = id.strip_prefix(TRAY_NOTE_PREFIX) {
                     let _ = app_handle.emit("tray-select-note", note_id.to_string());
                     return;
                 }
@@ -288,8 +288,10 @@ fn build_basic_tray_menu<R: tauri::Runtime>(
         .map_err(|err| err.to_string())
 }
 
+const TRAY_NOTE_PREFIX: &str = "tray_note:";
+
 fn tray_note_id(id: &str) -> String {
-    format!("tray_note:{id}")
+    format!("{TRAY_NOTE_PREFIX}{id}")
 }
 
 fn tray_note_label(title: &str) -> String {
