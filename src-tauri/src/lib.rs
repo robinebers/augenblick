@@ -293,7 +293,5 @@ fn tray_note_id(id: &str) -> String {
 }
 
 fn tray_note_label(title: &str) -> String {
-    let trimmed = title.trim();
-    let base = if trimmed.is_empty() { "New Note" } else { trimmed };
-    base.lines().collect::<Vec<_>>().join(" ")
+    title.trim().to_string()
 }
