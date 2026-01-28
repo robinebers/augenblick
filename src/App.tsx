@@ -1,6 +1,7 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
@@ -83,26 +84,54 @@ function App() {
     }
   }, []);
 
-  const handleCheckUpdates = useCallback(() => {
-    if (isCheckingUpdates) return;
+  const hasCheckedOnLaunchRef = useRef(false);
 
-    void runOrAlert(async () => {
+  const checkForUpdates = useCallback(
+    async (options: { silent?: boolean } = {}) => {
+      if (isCheckingUpdates) return;
+
       setIsCheckingUpdates(true);
       try {
         const update = await check();
         if (!update) {
-          toast.success("You're up to date.");
+          if (!options.silent) {
+            toast.success("You're up to date.");
+          }
           return;
         }
 
-        toast.success(`Update available: ${update.version}`);
-        await update.downloadAndInstall({ restart: true });
-        toast.success("Update installed. Restarting…");
+        // Download and install immediately (silently)
+        await update.downloadAndInstall();
+
+        // Show simple toast with Restart button
+        toast.success("New version ready to install", {
+          action: {
+            label: "Restart",
+            onClick: () => {
+              relaunch().catch((err) => {
+                toast.error("Restart failed", {
+                  description: "Please restart the app manually to apply the update.",
+                });
+                console.error("Relaunch failed:", err);
+              });
+            },
+          },
+          duration: Infinity,
+        });
+      } catch (err) {
+        if (!options.silent) {
+          toast.error("Update failed", { description: String(err) });
+        }
       } finally {
         setIsCheckingUpdates(false);
       }
-    });
-  }, [isCheckingUpdates, runOrAlert]);
+    },
+    [isCheckingUpdates],
+  );
+
+  const handleCheckUpdates = useCallback(() => {
+    void checkForUpdates({ silent: false });
+  }, [checkForUpdates]);
 
   const actions = useMemo(() => {
     const notesStore = useNotesStore.getState();
@@ -151,6 +180,12 @@ function App() {
     void runOrAlert(async () => {
       await useSettingsStore.getState().init();
       await useNotesStore.getState().init();
+
+      // Check for updates on launch (silent - only shows toast if update ready)
+      if (!hasCheckedOnLaunchRef.current) {
+        hasCheckedOnLaunchRef.current = true;
+        setTimeout(() => void checkForUpdates({ silent: true }), 2000);
+      }
 
       unlistenMenuOpen = await listen("menu-open-markdown", () => {
         void runOrAlert(() => actions.openMarkdown());
@@ -263,6 +298,7 @@ function App() {
       unlistenMenuTrash?.();
       unlistenMenuSettings?.();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- checkForUpdates excluded: only runs once on launch via ref guard
   }, [actions, runOrAlert]);
 
   return (
