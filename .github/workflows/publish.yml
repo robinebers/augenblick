@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.1.2). Required for manual runs."
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -20,6 +25,10 @@ jobs:
           - platform: macos-latest
             args: "--target x86_64-apple-darwin"
     runs-on: ${{ matrix.platform }}
+    env:
+      # When triggered from a tag push, use that tag.
+      # When triggered manually from a branch, require workflow_dispatch input.
+      RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +43,17 @@ jobs:
         with:
           bun-version: "latest"
       - run: bun install
+
+      - name: Validate release tag
+        run: |
+          if [[ -z "$RELEASE_TAG" ]]; then
+            echo "Missing RELEASE_TAG (push a v* tag, or provide workflow_dispatch input 'tag')."
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
+            echo "Invalid RELEASE_TAG: $RELEASE_TAG (expected vMAJOR.MINOR.PATCH)"
+            exit 1
+          fi
 
       - name: Import Apple Developer Certificate
         env:
@@ -64,8 +84,8 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: ${{ github.ref_name }}
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: ${{ env.RELEASE_TAG }}
           releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true
