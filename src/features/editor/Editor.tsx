@@ -254,7 +254,23 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
               interactive: true,
               onHide: closeLinkInput,
             }}
-            shouldShow={({ state, editor }) => showLinkInput || !state.selection.empty || editor.isActive("link")}
+            shouldShow={({ state }) => {
+              if (showLinkInput) return true;
+              const { selection } = state;
+              const { from, to, empty } = selection;
+
+              if (!empty) {
+                const selectedText = state.doc.textBetween(from, to, " ", " ");
+                return selectedText.trim().length > 0;
+              }
+
+              if (!state.doc.textContent.trim().length) return false;
+
+              const linkMark = state.schema.marks.link;
+              if (!linkMark || !("$from" in selection)) return false;
+
+              return selection.$from.marks().some((mark) => mark.type === linkMark);
+            }}
           >
             <button
               type="button"
