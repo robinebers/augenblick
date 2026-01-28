@@ -181,6 +181,26 @@ function App() {
     });
   }, []);
 
+  const confirmUnsaved = useCallback(async (title: string) => {
+    const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
+    if (dirtyCount === 0) return true;
+
+    const choice = await openDialog({
+      title,
+      description: `You have unsaved changes in ${dirtyCount} note${dirtyCount === 1 ? "" : "s"}.`,
+      cancelId: "cancel",
+      actions: [
+        { id: "save", label: "Save" },
+        { id: "discard", label: "Don't Save", variant: "secondary" },
+        { id: "cancel", label: "Cancel", variant: "secondary" },
+      ],
+    });
+
+    if (choice === "cancel") return false;
+    if (choice === "save") await useNotesStore.getState().saveAllDirty();
+    return true;
+  }, []);
+
   useEffect(() => {
     let unlistenClose: (() => void) | null = null;
     let unlistenMenuOpen: (() => void) | null = null;
@@ -244,23 +264,9 @@ function App() {
 
       unlistenTrayQuit = await listen("tray-quit", () => {
         void runOrAlert(async () => {
-          const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
-          if (dirtyCount > 0) {
-            const choice = await openDialog({
-              title: "Quit Augenblick?",
-              description: `You have unsaved changes in ${dirtyCount} note${dirtyCount === 1 ? "" : "s"}.`,
-              cancelId: "cancel",
-              actions: [
-                { id: "save", label: "Save" },
-                { id: "discard", label: "Don't Save", variant: "secondary" },
-                { id: "cancel", label: "Cancel", variant: "secondary" },
-              ],
-            });
-
-            if (choice === "cancel") return;
-            if (choice === "save") await useNotesStore.getState().saveAllDirty();
-          }
-
+          await showMainWindow();
+          const shouldQuit = await confirmUnsaved("Quit Augenblick?");
+          if (!shouldQuit) return;
           await api.appExit();
         });
       });
@@ -271,23 +277,8 @@ function App() {
         event.preventDefault();
         isClosing = true;
         try {
-          const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
-          if (dirtyCount > 0) {
-            const choice = await openDialog({
-              title: "Hide Augenblick?",
-              description: `You have unsaved changes in ${dirtyCount} note${dirtyCount === 1 ? "" : "s"}.`,
-              cancelId: "cancel",
-              actions: [
-                { id: "save", label: "Save" },
-                { id: "discard", label: "Don't Save", variant: "secondary" },
-                { id: "cancel", label: "Cancel", variant: "secondary" },
-              ],
-            });
-
-            if (choice === "cancel") return;
-            if (choice === "save") await useNotesStore.getState().saveAllDirty();
-          }
-
+          const shouldHide = await confirmUnsaved("Hide Augenblick?");
+          if (!shouldHide) return;
           await getCurrentWindow().hide();
         } finally {
           isClosing = false;
@@ -368,7 +359,7 @@ function App() {
       unlistenTraySelect?.();
       unlistenTrayQuit?.();
     };
-  }, [actions, checkForUpdates, runOrAlert, showMainWindow]);
+  }, [actions, checkForUpdates, confirmUnsaved, runOrAlert, showMainWindow]);
 
   return (
     <ErrorBoundary>
