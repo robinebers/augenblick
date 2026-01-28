@@ -10,7 +10,10 @@ mod window_state;
 
 use app_state::AppState;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
-use tauri::{Emitter, Manager};
+use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Emitter, Manager};
+#[cfg(target_os = "macos")]
+use tauri::ActivationPolicy;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,6 +24,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(ActivationPolicy::Accessory);
+
             let app_handle = app.handle().clone();
             let state = AppState::init(&app_handle).map_err(std::io::Error::other)?;
             app.manage(state.clone());
@@ -120,7 +126,23 @@ pub fn run() {
                 .map_err(|err| std::io::Error::other(err.to_string()))?;
 
             app.on_menu_event(|app_handle, event| {
-                match event.id().0.as_str() {
+                let id = event.id().0.as_str();
+                if id == "tray_new_note" {
+                    let _ = app_handle.emit("tray-new-note", ());
+                    return;
+                }
+
+                if id == "tray_quit" {
+                    let _ = app_handle.emit("tray-quit", ());
+                    return;
+                }
+
+                if let Some(note_id) = id.strip_prefix(TRAY_NOTE_PREFIX) {
+                    let _ = app_handle.emit("tray-select-note", note_id.to_string());
+                    return;
+                }
+
+                match id {
                     "app_settings" => {
                         let _ = app_handle.emit("menu-settings", ());
                     }
@@ -152,6 +174,34 @@ pub fn run() {
                 };
             });
 
+            let tray_menu = build_tray_menu(&app_handle)
+                .or_else(|err: String| {
+                    logs::error("tray-menu", &err);
+                    build_basic_tray_menu(&app_handle)
+                })
+                .map_err(std::io::Error::other)?;
+
+            let tray_icon_path = app_handle
+                .path()
+                .resolve("icons/tray-icon.png", tauri::path::BaseDirectory::Resource)
+                .map_err(|err| std::io::Error::other(err.to_string()))?;
+            let tray_icon = tauri::image::Image::from_path(tray_icon_path)
+                .map_err(|err| std::io::Error::other(err.to_string()))?;
+
+            TrayIconBuilder::new()
+                .icon(tray_icon)
+                .icon_as_template(true)
+                .menu(&tray_menu)
+                .on_tray_icon_event(|tray, event| {
+                    if matches!(event, TrayIconEvent::Enter { .. }) {
+                        if let Ok(menu) = build_tray_menu(tray.app_handle()) {
+                            let _ = tray.set_menu(Some(menu));
+                        }
+                    }
+                })
+                .build(&app_handle)
+                .map_err(|err| std::io::Error::other(err.to_string()))?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -172,8 +222,78 @@ pub fn run() {
             commands::settings_set,
             commands::app_state_get_all,
             commands::app_state_set,
-            commands::expiry_run_now
+            commands::expiry_run_now,
+            commands::app_exit
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn build_tray_menu<R: tauri::Runtime>(
+    app_handle: &AppHandle<R>,
+) -> Result<tauri::menu::Menu<R>, String> {
+    let state = app_handle.state::<AppState>();
+    let conn = state
+        .db
+        .lock()
+        .map_err(|_| "DB lock poisoned".to_string())?;
+    let notes_list = notes::list(&conn)?;
+
+    let pinned: Vec<_> = notes_list.active.iter().filter(|note| note.is_pinned).collect();
+    let mut recent: Vec<_> = notes_list
+        .active
+        .iter()
+        .filter(|note| !note.is_pinned)
+        .collect();
+    recent.sort_by(|a, b| b.last_interaction.cmp(&a.last_interaction));
+    recent.truncate(5);
+
+    let mut menu = MenuBuilder::new(app_handle).text("tray_new_note", "New Note");
+
+    if !pinned.is_empty() {
+        let pinned_header = MenuItemBuilder::new("Pinned")
+            .enabled(false)
+            .build(app_handle)
+            .map_err(|err| err.to_string())?;
+        menu = menu.separator().item(&pinned_header);
+        for note in pinned {
+            menu = menu.text(tray_note_id(&note.id), tray_note_label(note.title.as_str()));
+        }
+    }
+
+    if !recent.is_empty() {
+        let recent_header = MenuItemBuilder::new("Recent")
+            .enabled(false)
+            .build(app_handle)
+            .map_err(|err| err.to_string())?;
+        menu = menu.separator().item(&recent_header);
+        for note in recent {
+            menu = menu.text(tray_note_id(&note.id), tray_note_label(note.title.as_str()));
+        }
+    }
+
+    menu = menu.separator().text("tray_quit", "Quit Augenblick");
+
+    menu.build().map_err(|err| err.to_string())
+}
+
+fn build_basic_tray_menu<R: tauri::Runtime>(
+    app_handle: &AppHandle<R>,
+) -> Result<tauri::menu::Menu<R>, String> {
+    MenuBuilder::new(app_handle)
+        .text("tray_new_note", "New Note")
+        .separator()
+        .text("tray_quit", "Quit Augenblick")
+        .build()
+        .map_err(|err| err.to_string())
+}
+
+const TRAY_NOTE_PREFIX: &str = "tray_note:";
+
+fn tray_note_id(id: &str) -> String {
+    format!("{TRAY_NOTE_PREFIX}{id}")
+}
+
+fn tray_note_label(title: &str) -> String {
+    title.trim().to_string()
 }
