@@ -30,7 +30,6 @@ type Deps = {
   selectNote: (id: string) => void;
   undoReorder: () => void;
   redoReorder: () => void;
-  emitEditor: (event: string) => void;
 };
 
 export function createPageKeydownHandler(deps: Deps) {
@@ -109,18 +108,6 @@ export function createPageKeydownHandler(deps: Deps) {
     if (key === "p") {
       e.preventDefault();
       deps.togglePinCurrent();
-      return;
-    }
-
-    if (key === "f") {
-      e.preventDefault();
-      deps.emitEditor(e.altKey ? "augenblick:replace" : "augenblick:find");
-      return;
-    }
-
-    if (key === "g") {
-      e.preventDefault();
-      deps.emitEditor(e.shiftKey ? "augenblick:find-prev" : "augenblick:find-next");
       return;
     }
 

@@ -20,7 +20,6 @@ describe("pageHotkeys", () => {
       selectNote: vi.fn(),
       undoReorder: vi.fn(),
       redoReorder: vi.fn(),
-      emitEditor: vi.fn(),
     };
 
     const handler = createPageKeydownHandler(deps);
@@ -46,7 +45,6 @@ describe("pageHotkeys", () => {
       selectNote: vi.fn(),
       undoReorder: vi.fn(),
       redoReorder: vi.fn(),
-      emitEditor: vi.fn(),
     };
 
     const handler = createPageKeydownHandler(deps);
@@ -72,7 +70,6 @@ describe("pageHotkeys", () => {
       selectNote: vi.fn(),
       undoReorder: vi.fn(),
       redoReorder: vi.fn(),
-      emitEditor: vi.fn(),
     };
 
     const handler = createPageKeydownHandler(deps);
@@ -98,7 +95,6 @@ describe("pageHotkeys", () => {
       selectNote: vi.fn(),
       undoReorder: vi.fn(),
       redoReorder: vi.fn(),
-      emitEditor: vi.fn(),
     };
 
     const handler = createPageKeydownHandler(deps);
@@ -134,7 +130,6 @@ describe("pageHotkeys", () => {
       selectNote: vi.fn(),
       undoReorder: vi.fn(),
       redoReorder: vi.fn(),
-      emitEditor: vi.fn(),
     };
 
     const handler = createPageKeydownHandler(deps);
@@ -188,7 +183,6 @@ describe("pageHotkeys", () => {
       }),
       undoReorder: vi.fn(),
       redoReorder: vi.fn(),
-      emitEditor: vi.fn(),
     };
 
     const handler = createPageKeydownHandler(deps);
@@ -203,98 +197,6 @@ describe("pageHotkeys", () => {
     } as unknown as KeyboardEvent;
     handler(e);
     expect(deps.selectNote).toHaveBeenCalledWith("a");
-  });
-
-  it("emits editor find/replace with Cmd+F", () => {
-    const deps = {
-      getNotesSnapshot: () => ({ list: { active: [], trashed: [] }, selectedId: null, viewMode: "notes" as const }),
-      getSelectedId: () => null,
-      toggleCommandPalette: vi.fn(),
-      closeCommandPalette: vi.fn(),
-      openSettings: vi.fn(),
-      setViewMode: vi.fn(),
-      createNote: vi.fn(),
-      togglePinCurrent: vi.fn(),
-      closeCurrent: vi.fn(),
-      openMarkdown: vi.fn(),
-      saveCurrent: vi.fn(),
-      saveAs: vi.fn(),
-      selectNote: vi.fn(),
-      undoReorder: vi.fn(),
-      redoReorder: vi.fn(),
-      emitEditor: vi.fn(),
-    };
-    const handler = createPageKeydownHandler(deps);
-
-    const e1 = {
-      key: "f",
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: false,
-      altKey: false,
-      target: document.body,
-      preventDefault: vi.fn(),
-    } as unknown as KeyboardEvent;
-    handler(e1);
-    expect(deps.emitEditor).toHaveBeenCalledWith("augenblick:find");
-
-    const e2 = {
-      key: "f",
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: false,
-      altKey: true,
-      target: document.body,
-      preventDefault: vi.fn(),
-    } as unknown as KeyboardEvent;
-    handler(e2);
-    expect(deps.emitEditor).toHaveBeenCalledWith("augenblick:replace");
-  });
-
-  it("emits editor find-next/prev with Cmd+G", () => {
-    const deps = {
-      getNotesSnapshot: () => ({ list: { active: [], trashed: [] }, selectedId: null, viewMode: "notes" as const }),
-      getSelectedId: () => null,
-      toggleCommandPalette: vi.fn(),
-      closeCommandPalette: vi.fn(),
-      openSettings: vi.fn(),
-      setViewMode: vi.fn(),
-      createNote: vi.fn(),
-      togglePinCurrent: vi.fn(),
-      closeCurrent: vi.fn(),
-      openMarkdown: vi.fn(),
-      saveCurrent: vi.fn(),
-      saveAs: vi.fn(),
-      selectNote: vi.fn(),
-      undoReorder: vi.fn(),
-      redoReorder: vi.fn(),
-      emitEditor: vi.fn(),
-    };
-    const handler = createPageKeydownHandler(deps);
-
-    const e1 = {
-      key: "g",
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: false,
-      altKey: false,
-      target: document.body,
-      preventDefault: vi.fn(),
-    } as unknown as KeyboardEvent;
-    handler(e1);
-    expect(deps.emitEditor).toHaveBeenCalledWith("augenblick:find-next");
-
-    const e2 = {
-      key: "g",
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: true,
-      altKey: false,
-      target: document.body,
-      preventDefault: vi.fn(),
-    } as unknown as KeyboardEvent;
-    handler(e2);
-    expect(deps.emitEditor).toHaveBeenCalledWith("augenblick:find-prev");
   });
 
   it("routes Cmd+S / Cmd+Shift+S and Cmd+O", () => {
@@ -314,7 +216,6 @@ describe("pageHotkeys", () => {
       selectNote: vi.fn(),
       undoReorder: vi.fn(),
       redoReorder: vi.fn(),
-      emitEditor: vi.fn(),
     };
     const handler = createPageKeydownHandler(deps);
 
@@ -375,7 +276,6 @@ describe("pageHotkeys", () => {
       selectNote: vi.fn(),
       undoReorder: vi.fn(),
       redoReorder: vi.fn(),
-      emitEditor: vi.fn(),
     };
 
     const handler = createPageKeydownHandler(deps);

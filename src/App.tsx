@@ -146,10 +146,6 @@ function App() {
     let unlistenMenuSaveAs: (() => void) | null = null;
     let unlistenMenuTrash: (() => void) | null = null;
     let unlistenMenuSettings: (() => void) | null = null;
-    let unlistenMenuFind: (() => void) | null = null;
-    let unlistenMenuReplace: (() => void) | null = null;
-    let unlistenMenuFindNext: (() => void) | null = null;
-    let unlistenMenuFindPrev: (() => void) | null = null;
     let isClosing = false;
 
     void runOrAlert(async () => {
@@ -174,15 +170,6 @@ function App() {
       unlistenMenuSettings = await listen("menu-settings", () => {
         setShowSettings(true);
       });
-
-      const emitEditor = (event: string) => {
-        window.dispatchEvent(new Event(event));
-      };
-
-      unlistenMenuFind = await listen("menu-find", () => emitEditor("augenblick:find"));
-      unlistenMenuReplace = await listen("menu-replace", () => emitEditor("augenblick:replace"));
-      unlistenMenuFindNext = await listen("menu-find-next", () => emitEditor("augenblick:find-next"));
-      unlistenMenuFindPrev = await listen("menu-find-prev", () => emitEditor("augenblick:find-prev"));
 
       unlistenClose = await getCurrentWindow().onCloseRequested(async (event) => {
         if (isClosing) return;
@@ -261,9 +248,6 @@ function App() {
       redoReorder: () => {
         void runOrAlert(() => useNotesStore.getState().redoReorder());
       },
-      emitEditor: (event) => {
-        window.dispatchEvent(new Event(event));
-      },
     });
 
     window.addEventListener("keydown", onKeyDown);
@@ -278,10 +262,6 @@ function App() {
       unlistenMenuSaveAs?.();
       unlistenMenuTrash?.();
       unlistenMenuSettings?.();
-      unlistenMenuFind?.();
-      unlistenMenuReplace?.();
-      unlistenMenuFindNext?.();
-      unlistenMenuFindPrev?.();
     };
   }, [actions, runOrAlert]);
 
