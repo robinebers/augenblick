@@ -1,6 +1,6 @@
-use tauri::{PhysicalPosition, PhysicalSize, Position, Size};
 use tauri::window::Monitor;
 use tauri::{AppHandle, Manager};
+use tauri::{PhysicalPosition, PhysicalSize, Position, Size};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 
 fn monitor_bounds(m: &Monitor) -> (i32, i32, i32, i32) {
@@ -23,10 +23,7 @@ fn pick_monitor(monitors: &[Monitor], x: i32, y: i32) -> Option<Monitor> {
     None
 }
 
-fn clamp_window_to_monitor(
-    window: &tauri::WebviewWindow,
-    monitor: &Monitor,
-) -> tauri::Result<()> {
+fn clamp_window_to_monitor(window: &tauri::WebviewWindow, monitor: &Monitor) -> tauri::Result<()> {
     let pos = window.outer_position()?;
     let size = window.outer_size()?;
 
@@ -69,7 +66,9 @@ pub fn restore_and_clamp(app: &AppHandle) -> tauri::Result<()> {
 
     let monitors = window.available_monitors().unwrap_or_default();
 
-    let pos = window.outer_position().unwrap_or(PhysicalPosition { x: 0, y: 0 });
+    let pos = window
+        .outer_position()
+        .unwrap_or(PhysicalPosition { x: 0, y: 0 });
     let size = window.outer_size().unwrap_or(PhysicalSize {
         width: 800,
         height: 600,

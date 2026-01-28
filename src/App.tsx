@@ -1,6 +1,7 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
@@ -37,6 +38,9 @@ function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+
+  const updateCheckInFlightRef = useRef(false);
+  const updateCheckTimeoutIdRef = useRef<number | null>(null);
 
   const list = useNotesStore((s) => s.list);
   const selectedId = useNotesStore((s) => s.selectedId);
@@ -89,26 +93,58 @@ function App() {
     await window.setFocus();
   }, []);
 
-  const handleCheckUpdates = useCallback(() => {
-    if (isCheckingUpdates) return;
+  const hasCheckedOnLaunchRef = useRef(false);
 
-    void runOrAlert(async () => {
-      setIsCheckingUpdates(true);
-      try {
-        const update = await check();
-        if (!update) {
+  const checkForUpdates = useCallback(async (options: { silent?: boolean } = {}) => {
+    if (updateCheckInFlightRef.current) return;
+
+    updateCheckInFlightRef.current = true;
+    setIsCheckingUpdates(true);
+
+    try {
+      const update = await check();
+      if (!update) {
+        if (!options.silent) {
           toast.success("You're up to date.");
-          return;
         }
-
-        toast.success(`Update available: ${update.version}`);
-        await update.downloadAndInstall({ restart: true });
-        toast.success("Update installed. Restarting…");
-      } finally {
-        setIsCheckingUpdates(false);
+        return;
       }
-    });
-  }, [isCheckingUpdates, runOrAlert]);
+
+      // Download and install immediately (silently)
+      await update.downloadAndInstall();
+
+      // Show simple toast with Restart button
+      toast.success("New version ready to install", {
+        action: {
+          label: "Restart",
+          onClick: () => {
+            relaunch().catch((err) => {
+              toast.error("Restart failed", {
+                description: "Please restart the app manually to apply the update.",
+              });
+              console.error("Relaunch failed:", err);
+            });
+          },
+        },
+        duration: Infinity,
+      });
+    } catch (err) {
+      if (!options.silent) {
+        toast.error("Update failed", { description: String(err) });
+      }
+    } finally {
+      updateCheckInFlightRef.current = false;
+      setIsCheckingUpdates(false);
+    }
+  }, []);
+
+  const handleCheckUpdates = useCallback(() => {
+    if (updateCheckTimeoutIdRef.current != null) {
+      window.clearTimeout(updateCheckTimeoutIdRef.current);
+      updateCheckTimeoutIdRef.current = null;
+    }
+    void checkForUpdates({ silent: false });
+  }, [checkForUpdates]);
 
   const actions = useMemo(() => {
     const notesStore = useNotesStore.getState();
@@ -159,6 +195,15 @@ function App() {
     void runOrAlert(async () => {
       await useSettingsStore.getState().init();
       await useNotesStore.getState().init();
+
+      // Check for updates on launch (silent - only shows toast if update ready)
+      if (!hasCheckedOnLaunchRef.current) {
+        hasCheckedOnLaunchRef.current = true;
+        updateCheckTimeoutIdRef.current = window.setTimeout(() => {
+          updateCheckTimeoutIdRef.current = null;
+          void checkForUpdates({ silent: true });
+        }, 2000);
+      }
 
       unlistenMenuOpen = await listen("menu-open-markdown", () => {
         void runOrAlert(() => actions.openMarkdown());
@@ -280,6 +325,10 @@ function App() {
     return () => {
       window.clearInterval(heartbeat);
       window.removeEventListener("keydown", onKeyDown);
+      if (updateCheckTimeoutIdRef.current != null) {
+        window.clearTimeout(updateCheckTimeoutIdRef.current);
+        updateCheckTimeoutIdRef.current = null;
+      }
       unlistenClose?.();
       unlistenMenuOpen?.();
       unlistenMenuNew?.();
@@ -290,7 +339,7 @@ function App() {
       unlistenTrayNew?.();
       unlistenTraySelect?.();
     };
-  }, [actions, runOrAlert, showMainWindow]);
+  }, [actions, checkForUpdates, runOrAlert, showMainWindow]);
 
   return (
     <ErrorBoundary>
