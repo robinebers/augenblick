@@ -201,6 +201,12 @@ pub fn expiry_run_now(state: State<'_, AppState>) -> Result<(), String> {
     expiry::sweep(&state)
 }
 
+#[tauri::command]
+pub fn app_exit(app: tauri::AppHandle) -> Result<(), String> {
+    app.exit(0);
+    Ok(())
+}
+
 fn get_setting_int(conn: &Connection, key: &str, default: i64) -> Result<i64, String> {
     let existing: Option<String> = conn
         .query_row(

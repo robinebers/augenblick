@@ -133,7 +133,7 @@ pub fn run() {
                 }
 
                 if id == "tray_quit" {
-                    app_handle.exit(0);
+                    let _ = app_handle.emit("tray-quit", ());
                     return;
                 }
 
@@ -222,7 +222,8 @@ pub fn run() {
             commands::settings_set,
             commands::app_state_get_all,
             commands::app_state_set,
-            commands::expiry_run_now
+            commands::expiry_run_now,
+            commands::app_exit
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -293,6 +294,6 @@ fn tray_note_id(id: &str) -> String {
 
 fn tray_note_label(title: &str) -> String {
     let trimmed = title.trim();
-    let base = if trimmed.is_empty() { "Untitled" } else { trimmed };
-    base.replace('\n', " ")
+    let base = if trimmed.is_empty() { "New Note" } else { trimmed };
+    base.lines().collect::<Vec<_>>().join(" ")
 }

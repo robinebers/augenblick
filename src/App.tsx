@@ -26,6 +26,7 @@ import { createPageKeydownHandler } from "@/routes/pageHotkeys";
 import { openDialog, confirmDialog } from "@/stores/dialogStore";
 import { useNotesStore } from "@/stores/notesStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { api } from "@/lib/api";
 
 const LazyEditor = lazy(() =>
   import("@/features/editor/Editor").then((mod) => ({ default: mod.Editor })),
@@ -190,6 +191,7 @@ function App() {
     let unlistenMenuSettings: (() => void) | null = null;
     let unlistenTrayNew: (() => void) | null = null;
     let unlistenTraySelect: (() => void) | null = null;
+    let unlistenTrayQuit: (() => void) | null = null;
     let isClosing = false;
 
     void runOrAlert(async () => {
@@ -240,30 +242,56 @@ function App() {
         });
       });
 
+      unlistenTrayQuit = await listen("tray-quit", () => {
+        void runOrAlert(async () => {
+          const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
+          if (dirtyCount > 0) {
+            const choice = await openDialog({
+              title: "Quit Augenblick?",
+              description: `You have unsaved changes in ${dirtyCount} note${dirtyCount === 1 ? "" : "s"}.`,
+              cancelId: "cancel",
+              actions: [
+                { id: "save", label: "Save" },
+                { id: "discard", label: "Don't Save", variant: "secondary" },
+                { id: "cancel", label: "Cancel", variant: "secondary" },
+              ],
+            });
+
+            if (choice === "cancel") return;
+            if (choice === "save") await useNotesStore.getState().saveAllDirty();
+          }
+
+          await api.appExit();
+        });
+      });
+
       unlistenClose = await getCurrentWindow().onCloseRequested(async (event) => {
         if (isClosing) return;
 
         event.preventDefault();
-        const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
-        if (dirtyCount > 0) {
-          const choice = await openDialog({
-            title: "Hide Augenblick?",
-            description: `You have unsaved changes in ${dirtyCount} note${dirtyCount === 1 ? "" : "s"}.`,
-            cancelId: "cancel",
-            actions: [
-              { id: "save", label: "Save" },
-              { id: "discard", label: "Don't Save", variant: "secondary" },
-              { id: "cancel", label: "Cancel", variant: "secondary" },
-            ],
-          });
-
-          if (choice === "cancel") return;
-          if (choice === "save") await useNotesStore.getState().saveAllDirty();
-        }
-
         isClosing = true;
-        await getCurrentWindow().hide();
-        isClosing = false;
+        try {
+          const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
+          if (dirtyCount > 0) {
+            const choice = await openDialog({
+              title: "Hide Augenblick?",
+              description: `You have unsaved changes in ${dirtyCount} note${dirtyCount === 1 ? "" : "s"}.`,
+              cancelId: "cancel",
+              actions: [
+                { id: "save", label: "Save" },
+                { id: "discard", label: "Don't Save", variant: "secondary" },
+                { id: "cancel", label: "Cancel", variant: "secondary" },
+              ],
+            });
+
+            if (choice === "cancel") return;
+            if (choice === "save") await useNotesStore.getState().saveAllDirty();
+          }
+
+          await getCurrentWindow().hide();
+        } finally {
+          isClosing = false;
+        }
       });
     });
 
@@ -338,6 +366,7 @@ function App() {
       unlistenMenuSettings?.();
       unlistenTrayNew?.();
       unlistenTraySelect?.();
+      unlistenTrayQuit?.();
     };
   }, [actions, checkForUpdates, runOrAlert, showMainWindow]);
 
