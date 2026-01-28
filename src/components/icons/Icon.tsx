@@ -10,6 +10,7 @@ import {
   Search,
   Save,
   Settings,
+  Strikethrough,
   Trash2,
   Undo2,
   X,
@@ -27,6 +28,7 @@ export type IconName =
   | "search"
   | "save"
   | "settings"
+  | "strike"
   | "trash"
   | "undo"
   | "x";
@@ -55,6 +57,7 @@ export function Icon({ name, size = 18, className = "", label, strokeWidth = 1.7
   if (name === "italic") return <Italic {...shared} />;
   if (name === "link") return <Link {...shared} />;
   if (name === "pin") return <Pin {...shared} />;
+  if (name === "strike") return <Strikethrough {...shared} />;
   if (name === "search") return <Search {...shared} />;
   if (name === "save") return <Save {...shared} />;
   if (name === "settings") return <Settings {...shared} />;

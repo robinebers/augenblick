@@ -79,23 +79,6 @@ pub fn run() {
                 .build()
                 .map_err(|err| std::io::Error::other(err.to_string()))?;
 
-            let find_item = MenuItemBuilder::with_id("edit_find", "Find…")
-                .accelerator("CmdOrCtrl+KeyF")
-                .build(app)
-                .map_err(|err| std::io::Error::other(err.to_string()))?;
-            let replace_item = MenuItemBuilder::with_id("edit_replace", "Find and Replace…")
-                .accelerator("CmdOrCtrl+Alt+KeyF")
-                .build(app)
-                .map_err(|err| std::io::Error::other(err.to_string()))?;
-            let find_next_item = MenuItemBuilder::with_id("edit_find_next", "Find Next")
-                .accelerator("CmdOrCtrl+KeyG")
-                .build(app)
-                .map_err(|err| std::io::Error::other(err.to_string()))?;
-            let find_prev_item = MenuItemBuilder::with_id("edit_find_prev", "Find Previous")
-                .accelerator("CmdOrCtrl+Shift+KeyG")
-                .build(app)
-                .map_err(|err| std::io::Error::other(err.to_string()))?;
-
             let edit_menu = SubmenuBuilder::new(app, "Edit")
                 .undo()
                 .redo()
@@ -104,12 +87,6 @@ pub fn run() {
                 .copy()
                 .paste()
                 .select_all()
-                .separator()
-                .item(&find_item)
-                .item(&replace_item)
-                .separator()
-                .item(&find_next_item)
-                .item(&find_prev_item)
                 .build()
                 .map_err(|err| std::io::Error::other(err.to_string()))?;
 
@@ -160,18 +137,6 @@ pub fn run() {
                     }
                     "file_trash_note" => {
                         let _ = app_handle.emit("menu-trash", ());
-                    }
-                    "edit_find" => {
-                        let _ = app_handle.emit("menu-find", ());
-                    }
-                    "edit_replace" => {
-                        let _ = app_handle.emit("menu-replace", ());
-                    }
-                    "edit_find_next" => {
-                        let _ = app_handle.emit("menu-find-next", ());
-                    }
-                    "edit_find_prev" => {
-                        let _ = app_handle.emit("menu-find-prev", ());
                     }
                     "view_toggle_devtools" => {
                         if let Some(window) = app_handle.get_webview_window("main") {

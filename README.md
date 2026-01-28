@@ -14,7 +14,7 @@ It's not about losing information, it's about not drowning in it.
 
 - **Auto-expiring notes** — Notes move to trash after 7 days of inactivity (configurable from 6 hours to 30 days)
 - **Pin to keep** — Pin important notes to prevent expiry (up to 5)
-- **Markdown editor** — Slash commands, tables, code blocks with syntax highlighting, images
+- **Markdown editor** — Tables, task lists, code blocks with syntax highlighting, images
 - **Draft vs Saved** — Drafts live in the app; save externally when you need permanence
 - **Trash buffer** — Deleted notes stick around for 30 days, just in case
 - **Command palette** — Quick access to everything with `⌘K`
@@ -38,8 +38,6 @@ It's not about losing information, it's about not drowning in it.
 | Trash note      | `⌘W`     |
 | Command palette | `⌘K`     |
 | Settings        | `⌘,`     |
-| Find            | `⌘F`     |
-| Replace         | `⌥⌘F`    |
 
 
 ## Built With AI
@@ -53,7 +51,7 @@ Built entirely with [Codex CLI](https://github.com/openai/codex), [Claude Code](
 - [Tauri](https://tauri.app) — Desktop framework (Rust backend)
 - [React](https://react.dev) — UI
 - [Zustand](https://zustand-demo.pmnd.rs) — State management
-- [Milkdown](https://milkdown.dev) — Markdown editor
+- [Tiptap](https://tiptap.dev) — Markdown editor
 - SQLite — Local storage
 
 ## License

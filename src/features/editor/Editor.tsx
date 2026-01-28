@@ -1,48 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { editorViewOptionsCtx } from "@milkdown/core";
-import { Editor as MilkEditor, defaultValueCtx, editorViewCtx, rootCtx } from "@milkdown/kit/core";
-import { commonmark } from "@milkdown/kit/preset/commonmark";
-import { gfm, insertTableCommand } from "@milkdown/kit/preset/gfm";
-import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
-import { prism, prismConfig } from "@milkdown/plugin-prism";
-import { history } from "@milkdown/plugin-history";
-import { blockSpec, block, BlockProvider } from "@milkdown/kit/plugin/block";
-import { SlashProvider, slashFactory } from "@milkdown/kit/plugin/slash";
-import { TooltipProvider, tooltipFactory } from "@milkdown/kit/plugin/tooltip";
-import {
-  linkTooltipPlugin,
-  configureLinkTooltip,
-  linkTooltipConfig,
-  toggleLinkCommand,
-} from "@milkdown/kit/component/link-tooltip";
-import { nord } from "@milkdown/theme-nord";
-import type { Node as ProseNode } from "@milkdown/prose/model";
-import { Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
-import type { EditorView } from "@milkdown/prose/view";
-import {
-  createCodeBlockCommand,
-  insertHrCommand,
-  insertImageCommand,
-  toggleEmphasisCommand,
-  toggleInlineCodeCommand,
-  toggleStrongCommand,
-  turnIntoTextCommand,
-  wrapInBlockquoteCommand,
-  wrapInBulletListCommand,
-  wrapInHeadingCommand,
-  wrapInOrderedListCommand,
-} from "@milkdown/kit/preset/commonmark";
-import { imageBlockComponent } from "@milkdown/kit/component/image-block";
-import { tableBlock, tableBlockConfig } from "@milkdown/kit/component/table-block";
-import * as milkdownUtils from "@milkdown/utils";
-import css from "refractor/lang/css.js";
-import javascript from "refractor/lang/javascript.js";
-import json from "refractor/lang/json.js";
-import markdown from "refractor/lang/markdown.js";
-import tsx from "refractor/lang/tsx.js";
-import typescript from "refractor/lang/typescript.js";
-import { Icon } from "@/components/icons/Icon";
+import type { KeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Extension } from "@tiptap/core";
+import { EditorContent, useEditor } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
+import StarterKit from "@tiptap/starter-kit";
+import { Markdown } from "@tiptap/markdown";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import Placeholder from "@tiptap/extension-placeholder";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { common, createLowlight } from "lowlight";
+import { Icon } from "@/components/icons/Icon";
 
 type Props = {
   value: string;
@@ -50,784 +19,225 @@ type Props = {
   readOnly?: boolean;
 };
 
-type Match = { from: number; to: number };
+const lowlight = createLowlight(common);
+const MarkdownImageText = Extension.create({
+  name: "markdownImageText",
+  markdownTokenName: "image",
+  parseMarkdown: (token, helpers) => {
+    const raw = (token.raw ?? token.text ?? "").toString();
+    if (!raw) return null;
+    return helpers.createTextNode(raw);
+  },
+});
+
+const MarkdownTableText = Extension.create({
+  name: "markdownTableText",
+  markdownTokenName: "table",
+  parseMarkdown: (token, helpers) => {
+    const raw = (token.raw ?? "").toString().replace(/\n$/, "");
+    if (!raw) return null;
+    return helpers.createNode("paragraph", null, [helpers.createTextNode(raw)]);
+  },
+});
+
+async function openLink(href: string) {
+  try {
+    await openUrl(href);
+  } catch (error) {
+    console.debug("tiptap:link-open-fallback", { href, error });
+    window.open(href, "_blank");
+  }
+}
 
 export function Editor({ value, onChange, readOnly = false }: Props) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const editorPromiseRef = useRef<Promise<MilkEditor> | null>(null);
-  const viewRef = useRef<EditorView | null>(null);
-  const lastMarkdownRef = useRef("");
-  const readOnlyRef = useRef(readOnly);
   const onChangeRef = useRef(onChange);
-
-  const [showFind, setShowFind] = useState(false);
-  const [showReplace, setShowReplace] = useState(false);
-  const [query, setQuery] = useState("");
-  const [replaceWith, setReplaceWith] = useState("");
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [cursor, setCursor] = useState(0);
-
-  const showFindRef = useRef(false);
-  const queryRef = useRef("");
-  const matchesRef = useRef<Match[]>([]);
-  const cursorRef = useRef(0);
-
-  const findInputRef = useRef<HTMLInputElement | null>(null);
-  const replaceInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    readOnlyRef.current = readOnly;
-  }, [readOnly]);
+  const readOnlyRef = useRef(readOnly);
+  const lastMarkdownRef = useRef(value);
+  const editorRef = useRef<ReturnType<typeof useEditor> | null>(null);
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [linkValue, setLinkValue] = useState("");
+  const linkInputRef = useRef<HTMLInputElement>(null);
+  const linkSelectionRef = useRef<{ from: number; to: number }>({ from: 0, to: 0 });
+  const linkActiveRef = useRef(false);
 
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
 
-
   useEffect(() => {
-    showFindRef.current = showFind;
-  }, [showFind]);
+    readOnlyRef.current = readOnly;
+  }, [readOnly]);
 
-  useEffect(() => {
-    queryRef.current = query;
-  }, [query]);
-
-  useEffect(() => {
-    matchesRef.current = matches;
-  }, [matches]);
-
-  useEffect(() => {
-    cursorRef.current = cursor;
-  }, [cursor]);
-
-  const prose = milkdownUtils["$prose"];
-  const { callCommand, markdownToSlice } = milkdownUtils;
-  const replaceAllMarkdown = milkdownUtils.replaceAll;
-
-  const ensureView = useCallback(async () => {
-    if (viewRef.current) return viewRef.current;
-    const promise = editorPromiseRef.current;
-    if (!promise) return null;
-    const editor = await promise;
-    viewRef.current = editor.action((ctx) => ctx.get(editorViewCtx));
-    return viewRef.current;
-  }, []);
-
-  const findMatchesInDoc = useCallback((doc: ProseNode, q: string): Match[] => {
-    if (!q) return [];
-    const queryLower = q.toLowerCase();
-    const out: Match[] = [];
-    doc.descendants((node, pos) => {
-      if (!node.isText || !node.text) return;
-      const haystack = node.text.toLowerCase();
-      let idx = 0;
-      while (true) {
-        const found = haystack.indexOf(queryLower, idx);
-        if (found === -1) break;
-        out.push({ from: pos + found, to: pos + found + q.length });
-        idx = found + Math.max(1, q.length);
-      }
-    });
-    return out;
-  }, []);
-
-  const refreshMatches = useCallback(() => {
-    const view = viewRef.current;
-    const q = queryRef.current;
-    if (!view || !q) {
-      setMatches([]);
-      setCursor(0);
-      return;
-    }
-    const next = findMatchesInDoc(view.state.doc, q);
-    setMatches(next);
-    setCursor((c) => (next.length === 0 ? 0 : c >= next.length ? 0 : c));
-  }, [findMatchesInDoc]);
-
-  const selectMatch = useCallback(
-    (index: number) => {
-      const view = viewRef.current;
-      if (!view) return;
-      refreshMatches();
-      const current = matchesRef.current;
-      const next =
-        current.length === 0 ? null : ((index % current.length) + current.length) % current.length;
-      if (next == null || current.length === 0) return;
-      setCursor(next);
-      const match = current[next]!;
-      const sel = TextSelection.create(view.state.doc, match.from, match.to);
-      view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
-      view.focus();
-    },
-    [refreshMatches],
-  );
-
-  const selectNextFrom = useCallback(
-    (pos: number) => {
-      const current = matchesRef.current;
-      if (current.length === 0) return;
-      const idx = current.findIndex((m) => m.from > pos);
-      selectMatch(idx === -1 ? 0 : idx);
-    },
-    [selectMatch],
-  );
-
-  const selectPrevFrom = useCallback(
-    (pos: number) => {
-      const current = matchesRef.current;
-      if (current.length === 0) return;
-      let idx = -1;
-      for (let i = current.length - 1; i >= 0; i--) {
-        if (current[i]!.to < pos) {
-          idx = i;
-          break;
-        }
-      }
-      selectMatch(idx === -1 ? current.length - 1 : idx);
-    },
-    [selectMatch],
-  );
-
-  const closeFind = useCallback(() => {
-    setShowFind(false);
-    setShowReplace(false);
-    setMatches([]);
-    setCursor(0);
-    showFindRef.current = false;
-    matchesRef.current = [];
-    cursorRef.current = 0;
-    viewRef.current?.focus();
-  }, []);
-
-  const openFindBar = useCallback(
-    async (replace: boolean) => {
-      await ensureView();
-      setShowFind(true);
-      setShowReplace(replace && !readOnlyRef.current);
-      showFindRef.current = true;
-
-      const view = viewRef.current;
-      if (view) {
-        const sel = view.state.selection;
-        if (sel.from !== sel.to) {
-          const selectedText = view.state.doc.textBetween(sel.from, sel.to, "\n").trim();
-          if (selectedText) {
-            setQuery(selectedText);
-            queryRef.current = selectedText;
-          }
-        }
-      }
-
-      requestAnimationFrame(() => {
-        findInputRef.current?.focus();
-        findInputRef.current?.select();
-      });
-
-      refreshMatches();
-      if (view && queryRef.current) selectNextFrom(view.state.selection.to);
-    },
-    [ensureView, refreshMatches, selectNextFrom],
-  );
-
-  const onFindInput = useCallback(
-    (next: string) => {
-      setQuery(next);
-      queryRef.current = next;
-      refreshMatches();
-      const view = viewRef.current;
-      if (!view || !next) return;
-      selectNextFrom(view.state.selection.to);
-    },
-    [refreshMatches, selectNextFrom],
-  );
-
-  const replaceCurrent = useCallback(() => {
-    if (readOnlyRef.current || !viewRef.current?.editable) return;
-    const view = viewRef.current;
-    if (!view) return;
-    refreshMatches();
-    const current = matchesRef.current;
-    if (current.length === 0) return;
-    const sel = view.state.selection;
-    const idx = current.findIndex((m) => m.from === sel.from && m.to === sel.to);
-    if (idx === -1) {
-      selectNextFrom(sel.to);
-      return;
-    }
-    const match = current[idx]!;
-    view.dispatch(view.state.tr.insertText(replaceWith, match.from, match.to).scrollIntoView());
-    requestAnimationFrame(() => {
-      refreshMatches();
-      if (viewRef.current) selectNextFrom(viewRef.current.state.selection.to);
-    });
-  }, [refreshMatches, replaceWith, selectNextFrom]);
-
-  const replaceAll = useCallback(() => {
-    if (readOnlyRef.current || !viewRef.current?.editable) return;
-    const view = viewRef.current;
-    if (!view) return;
-    refreshMatches();
-    const current = matchesRef.current;
-    if (current.length === 0) return;
-    let tr = view.state.tr;
-    for (const match of [...current].reverse()) {
-      tr = tr.insertText(replaceWith, match.from, match.to);
-    }
-    view.dispatch(tr.scrollIntoView());
-    requestAnimationFrame(() => refreshMatches());
-  }, [refreshMatches, replaceWith]);
-
-  useEffect(() => {
-    const node = containerRef.current;
-    if (!node) return;
-
-    const slash = slashFactory("augenblick");
-    const slashEl = document.createElement("div");
-    slashEl.className = "mk-slash";
-
-    const selectionToolbar = tooltipFactory("augenblick-selection");
-    const selectionToolbarEl = document.createElement("div");
-    selectionToolbarEl.className = "mk-selection-toolbar";
-
-    const blockHandleEl = document.createElement("div");
-    blockHandleEl.className = "mk-block-handle";
-    blockHandleEl.innerHTML = `
-      <button type="button" class="mk-block-btn" data-action="plus" aria-label="Insert block">+</button>
-      <div class="mk-block-grab" data-action="drag" aria-label="Drag block" title="Drag">⋮⋮</div>
-    `;
-
-    let slashSearch = "";
-    let slashIndex = 0;
-    let slashItems: { id: string; label: string; keywords: string[]; run: () => void }[] = [];
-
-    function setSlashItems(items: typeof slashItems) {
-      slashItems = items;
-      if (slashIndex >= slashItems.length) slashIndex = 0;
-    }
-
-    function renderSlash() {
-      const rows = slashItems
-        .map((item, idx) => {
-          const selected = idx === slashIndex;
-          return `<button type="button" class="mk-slash-item" data-id="${item.id}" ${
-            selected ? 'data-selected="true"' : ""
-          }>${item.label}</button>`;
-        })
-        .join("");
-      slashEl.innerHTML = `<div class="mk-slash-inner">${rows || `<div class="mk-slash-empty">No results</div>`}</div>`;
-    }
-
-    function deleteSlashTrigger(v: EditorView, provider: SlashProvider) {
-      const content = provider.getContent(v) ?? "";
-      const match = content.match(/\/[\w-]*$/);
-      if (!match) return;
-      const from = v.state.selection.from - match[0].length;
-      const to = v.state.selection.from;
-      if (from < 0 || from >= to) return;
-      v.dispatch(v.state.tr.delete(from, to));
-    }
-
-    function runEditorAction(fn: (editor: MilkEditor) => void) {
-      if (readOnlyRef.current) return;
-      const p = editorPromiseRef.current;
-      if (!p) return;
-      void p.then(fn);
-    }
-
-    function makeSlashCommands(v: EditorView, provider: SlashProvider) {
-      const base: typeof slashItems = [
-        {
-          id: "text",
-          label: "Text",
-          keywords: ["paragraph", "text"],
-          run: () =>
-            runEditorAction((editor) => {
-              deleteSlashTrigger(v, provider);
-              editor.action(callCommand(turnIntoTextCommand.key));
-            }),
-        },
-        {
-          id: "h1",
-          label: "Heading 1",
-          keywords: ["heading", "h1", "#"],
-          run: () =>
-            runEditorAction((editor) => {
-              deleteSlashTrigger(v, provider);
-              editor.action(callCommand(wrapInHeadingCommand.key, 1));
-            }),
-        },
-        {
-          id: "h2",
-          label: "Heading 2",
-          keywords: ["heading", "h2", "##"],
-          run: () =>
-            runEditorAction((editor) => {
-              deleteSlashTrigger(v, provider);
-              editor.action(callCommand(wrapInHeadingCommand.key, 2));
-            }),
-        },
-        {
-          id: "bullet",
-          label: "Bullet List",
-          keywords: ["list", "bullet", "-"],
-          run: () =>
-            runEditorAction((editor) => {
-              deleteSlashTrigger(v, provider);
-              editor.action(callCommand(wrapInBulletListCommand.key));
-            }),
-        },
-        {
-          id: "task",
-          label: "Task List",
-          keywords: ["task", "todo", "checkbox", "list"],
-          run: () =>
-            runEditorAction((editor) => {
-              deleteSlashTrigger(v, provider);
-              editor.action((ctx) => {
-                const view = ctx.get(editorViewCtx);
-                const slice = markdownToSlice("- [ ] ")(ctx);
-                if (!slice) return;
-                view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
-                view.focus();
-              });
-            }),
-        },
-        {
-          id: "ordered",
-          label: "Numbered List",
-          keywords: ["list", "ordered", "1."],
-          run: () =>
-            runEditorAction((editor) => {
-              deleteSlashTrigger(v, provider);
-              editor.action(callCommand(wrapInOrderedListCommand.key));
-            }),
-        },
-        {
-          id: "quote",
-          label: "Quote",
-          keywords: ["blockquote", "quote", ">"],
-          run: () =>
-            runEditorAction((editor) => {
-              deleteSlashTrigger(v, provider);
-              editor.action(callCommand(wrapInBlockquoteCommand.key));
-            }),
-        },
-        {
-          id: "code",
-          label: "Code Block",
-          keywords: ["code", "```"],
-          run: () =>
-            runEditorAction((editor) => {
-              deleteSlashTrigger(v, provider);
-              editor.action(callCommand(createCodeBlockCommand.key));
-            }),
-        },
-        {
-          id: "hr",
-          label: "Divider",
-          keywords: ["divider", "hr", "---"],
-          run: () =>
-            runEditorAction((editor) => {
-              deleteSlashTrigger(v, provider);
-              editor.action(callCommand(insertHrCommand.key));
-            }),
-        },
-        {
-          id: "table",
-          label: "Table (3×3)",
-          keywords: ["table", "grid"],
-          run: () =>
-            runEditorAction((editor) => {
-              deleteSlashTrigger(v, provider);
-              editor.action(callCommand(insertTableCommand.key, { row: 3, col: 3 }));
-            }),
-        },
-        {
-          id: "image",
-          label: "Image (URL)…",
-          keywords: ["image", "img", "picture"],
-          run: () =>
-            runEditorAction((editor) => {
-              const src = window.prompt("Image URL");
-              if (!src) return;
-              deleteSlashTrigger(v, provider);
-              editor.action(callCommand(insertImageCommand.key, { src }));
-            }),
-        },
-      ];
-
-      const q = slashSearch.trim().toLowerCase();
-      if (!q) return base;
-      return base.filter((c) => [c.label, ...c.keywords].some((p) => p.toLowerCase().includes(q)));
-    }
-
-    const slashProvider = new SlashProvider({
-      content: slashEl,
-      offset: 8,
-      shouldShow(this: SlashProvider, view) {
-        const content = this.getContent(view) ?? "";
-        const m = content.match(/\/(\w[\w-]*)?$/);
-        return Boolean(m);
-      },
-    });
-
-    slashEl.addEventListener("mousedown", (e) => e.preventDefault());
-    slashEl.addEventListener("click", (e) => {
-      const target = (e.target as HTMLElement | null)?.closest<HTMLElement>(".mk-slash-item");
-      const id = target?.dataset.id;
-      if (!id) return;
-      const item = slashItems.find((x) => x.id === id);
-      item?.run();
-      ensureView().then((v) => v?.focus());
-    });
-
-    const onSlashKeyDown = (e: KeyboardEvent) => {
-      if (slashEl.dataset.show !== "true") return;
-      if (slashItems.length === 0) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        slashProvider.hide();
-        ensureView().then((v) => v?.focus());
-        return;
-      }
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        slashIndex = (slashIndex + 1) % slashItems.length;
-        renderSlash();
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        slashIndex = (slashIndex - 1 + slashItems.length) % slashItems.length;
-        renderSlash();
-        return;
-      }
-      if (e.key === "Enter") {
-        const item = slashItems[slashIndex];
-        if (!item) return;
-        e.preventDefault();
-        item.run();
-        ensureView().then((v) => v?.focus());
-      }
-    };
-    window.addEventListener("keydown", onSlashKeyDown, true);
-
-    // Lucide icon SVGs (size 18, strokeWidth 1.75)
-    const lucideAttrs = 'width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"';
-    const icons = {
-      bold: `<svg ${lucideAttrs}><path d="M6 12h8a4 4 0 0 0 0-8H6v8Z"/><path d="M6 12h9a4 4 0 0 1 0 8H6v-8Z"/></svg>`,
-      italic: `<svg ${lucideAttrs}><line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/></svg>`,
-      code: `<svg ${lucideAttrs}><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
-      link: `<svg ${lucideAttrs}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
-    };
-
-    const selectionToolbarProvider = new TooltipProvider({
-      content: selectionToolbarEl,
-      offset: 8,
-      shouldShow: (v) => {
-        if (readOnlyRef.current || !v.editable) return false;
-        if (!v.state.selection.content().size) return false;
-        // Hide when selection touches any link (let link tooltip handle it)
-        const { from, to } = v.state.selection;
-        let hasLink = false;
-        v.state.doc.nodesBetween(from, to, (node) => {
-          if (node.marks?.some((m) => m.type.name === "link")) hasLink = true;
-        });
-        if (hasLink) return false;
-        return true;
-      },
-    });
-
-    selectionToolbarEl.addEventListener("mousedown", (e) => e.preventDefault());
-    selectionToolbarEl.addEventListener("click", (e) => {
-      if (readOnlyRef.current) return;
-      const action = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-action]")?.dataset
-        .action;
-      if (!action) return;
-      if (action === "bold") runEditorAction((ed) => ed.action(callCommand(toggleStrongCommand.key)));
-      if (action === "italic")
-        runEditorAction((ed) => ed.action(callCommand(toggleEmphasisCommand.key)));
-      if (action === "code")
-        runEditorAction((ed) => ed.action(callCommand(toggleInlineCodeCommand.key)));
-      if (action === "link") {
-        // Hide selection toolbar immediately since link tooltip will take over
-        selectionToolbarProvider.hide();
-        runEditorAction((ed) => ed.action(callCommand(toggleLinkCommand.key)));
-      }
-    });
-    selectionToolbarEl.innerHTML = `
-      <div class="mk-selection-inner">
-        <button type="button" class="mk-selection-btn" data-action="bold">${icons.bold}</button>
-        <button type="button" class="mk-selection-btn" data-action="italic">${icons.italic}</button>
-        <button type="button" class="mk-selection-btn" data-action="code">${icons.code}</button>
-        <button type="button" class="mk-selection-btn" data-action="link">${icons.link}</button>
-      </div>
-    `;
-
-    const p = MilkEditor.make()
-      .config(configureLinkTooltip)
-      .config((ctx) => {
-        ctx.set(rootCtx, node);
-        ctx.set(defaultValueCtx, value);
-        ctx.set(prismConfig.key, {
-          configureRefractor: (refractor) => {
-            refractor.register(markdown);
-            refractor.register(css);
-            refractor.register(javascript);
-            refractor.register(typescript);
-            refractor.register(tsx);
-            refractor.register(json);
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({
+          codeBlock: false,
+          link: {
+            openOnClick: false,
+            autolink: true,
+            linkOnPaste: true,
           },
-        });
-
-        // Configure link tooltip
-        ctx.update(linkTooltipConfig.key, (cfg) => ({
-          ...cfg,
-          linkIcon: "↗",
-          editButton: "✎",
-          removeButton: "✕",
-          confirmButton: "✓",
-          onCopyLink: (link: string) => {
-            // Open the link externally when clicking the link icon
-            if (link.startsWith("http://") || link.startsWith("https://")) {
-              openUrl(link).catch(console.error);
-            } else {
-              // Fall back to copy for non-http links
-              navigator.clipboard.writeText(link);
-            }
-          },
-        }));
-
-        const l = ctx.get(listenerCtx);
-        l.markdownUpdated((_ctx, markdown, prevMarkdown) => {
-          lastMarkdownRef.current = markdown;
-          if (!readOnlyRef.current && markdown !== prevMarkdown) onChangeRef.current(markdown);
-          if (showFindRef.current) refreshMatches();
-        });
-
-        ctx.update(editorViewOptionsCtx, (prev) => ({
-          ...prev,
-          editable: () => !readOnlyRef.current,
-        }));
-
-        ctx.update(tableBlockConfig.key, (cfg) => ({
-          ...cfg,
-          renderButton: (type) => {
-            switch (type) {
-              case "add_row":
-              case "add_col":
-                return "＋";
-              case "delete_row":
-              case "delete_col":
-                return "−";
-              case "align_col_left":
-                return "⟸";
-              case "align_col_center":
-                return "↔";
-              case "align_col_right":
-                return "⟹";
-              case "col_drag_handle":
-              case "row_drag_handle":
-                return "⠿";
-            }
-          },
-        }));
-
-        ctx.set(blockSpec.key, {
-          view: () => {
-            const provider = new BlockProvider({
-              ctx,
-              content: blockHandleEl,
-              getOffset: () => 8,
-            });
-
-            const onPlus = (ev: MouseEvent) => {
-              const target = ev.target as HTMLElement | null;
-              const action = target?.closest<HTMLElement>("[data-action]")?.dataset.action;
-              if (action !== "plus") return;
-              ev.preventDefault();
-              void ensureView().then((v) => {
-                if (!v) return;
-                v.dispatch(v.state.tr.insertText("/"));
-                v.focus();
-              });
-            };
-            blockHandleEl.addEventListener("click", onPlus);
-
-            return {
-              update: provider.update,
-              destroy: () => {
-                blockHandleEl.removeEventListener("click", onPlus);
-                provider.destroy();
-              },
-            };
-          },
-        });
-
-        ctx.set(slash.key, {
-          view: () => ({
-            update: (v, prevState) => {
-              slashProvider.update(v, prevState);
-              const content = slashProvider.getContent(v) ?? "";
-              const m = content.match(/\/(\w[\w-]*)?$/);
-              slashSearch = m?.[1] ?? "";
-              setSlashItems(makeSlashCommands(v, slashProvider));
-              if (slashItems.length === 0) slashIndex = 0;
-              renderSlash();
-            },
-            destroy: () => slashProvider.destroy(),
-          }),
-        });
-
-        ctx.set(selectionToolbar.key, {
-          view: () => ({
-            update: selectionToolbarProvider.update,
-            destroy: selectionToolbarProvider.destroy,
-          }),
-        });
-      })
-      .config(nord)
-      .use(listener)
-      .use(commonmark)
-      .use(gfm)
-      .use(prism)
-      .use(
-        prose((ctx: any) => {
-          return new Plugin({
-            key: new PluginKey("editor-interactions"),
-            props: {
-              handlePaste(view, event) {
-                const text = event.clipboardData?.getData("text/plain");
-                if (!text) return false;
-                if (view.state.selection.$from.parent.type.spec.code) return false;
-
-                const slice = markdownToSlice(text)(ctx);
-                if (slice) {
-                  event.preventDefault();
-                  view.dispatch(view.state.tr.replaceSelection(slice));
-                  return true;
-                }
-                return false;
-              },
-              handleClickOn(view, _pos, node, nodePos, event) {
-                if (readOnlyRef.current || !view.editable) return false;
-                if (!(event instanceof MouseEvent) || event.button !== 0) return false;
-                const target = event.target as HTMLElement | null;
-                const li = target?.closest?.("li[data-item-type='task']");
-                if (!li) return false;
-                const rect = li.getBoundingClientRect();
-                const hit = event.clientX - rect.left <= 24;
-                if (!hit) return false;
-                const pos = view.posAtDOM(li, 0);
-                if (pos == null) return false;
-                const resolved = view.state.doc.resolve(pos);
-                let depth = resolved.depth;
-                while (depth > 0 && resolved.node(depth).type.name !== "list_item") depth -= 1;
-                if (depth === 0) return false;
-                const listItem = resolved.node(depth);
-                if (listItem.attrs.checked == null) return false;
-                const checked = !Boolean(listItem.attrs.checked);
-                view.dispatch(
-                  view.state.tr.setNodeMarkup(resolved.before(depth), undefined, {
-                    ...listItem.attrs,
-                    checked,
-                  }),
-                );
-                return true;
-              },
-            },
-          });
         }),
-      )
-      .use(history)
-      .use(block)
-      .use(slash)
-      .use(selectionToolbar)
-      .use(linkTooltipPlugin)
-      .use(imageBlockComponent)
-      .use(tableBlock)
-      .create();
-
-    editorPromiseRef.current = p;
-    void p.then(() => {
-      if (editorPromiseRef.current !== p) return;
-      requestAnimationFrame(() => {
-        const editorEl = node.querySelector<HTMLElement>(".editor");
-        editorEl?.focus();
-      });
-    });
-    void p.then((editor) => {
-      if (editorPromiseRef.current !== p) return;
-      viewRef.current = editor.action((ctx) => ctx.get(editorViewCtx));
-    });
-
-    return () => {
-      slashProvider.destroy();
-      selectionToolbarProvider.destroy();
-      window.removeEventListener("keydown", onSlashKeyDown, true);
-      const promise = editorPromiseRef.current;
-      editorPromiseRef.current = null;
-      viewRef.current = null;
-      if (!promise) return;
-      void (async () => {
-        const editor = await promise;
-        await editor.destroy();
-      })();
-    };
-  }, []);
-
-  useEffect(() => {
-    const run = (task: () => Promise<void>) => () => {
-      void task();
-    };
-
-    const onFind = run(() => openFindBar(false));
-    const onReplace = run(() => openFindBar(true));
-    const onFindNext = run(async () => {
-      if (!showFindRef.current) await openFindBar(false);
-      await ensureView();
-      refreshMatches();
-      const view = viewRef.current;
-      if (!view || !queryRef.current) return;
-      selectNextFrom(view.state.selection.to);
-    });
-    const onFindPrev = run(async () => {
-      if (!showFindRef.current) await openFindBar(false);
-      await ensureView();
-      refreshMatches();
-      const view = viewRef.current;
-      if (!view || !queryRef.current) return;
-      selectPrevFrom(view.state.selection.from);
-    });
-    const onFocusEditor = run(async () => {
-      const view = await ensureView();
-      view?.focus();
-    });
-
-    window.addEventListener("augenblick:find", onFind);
-    window.addEventListener("augenblick:replace", onReplace);
-    window.addEventListener("augenblick:find-next", onFindNext);
-    window.addEventListener("augenblick:find-prev", onFindPrev);
-    window.addEventListener("augenblick:focus-editor", onFocusEditor);
-
-    return () => {
-      window.removeEventListener("augenblick:find", onFind);
-      window.removeEventListener("augenblick:replace", onReplace);
-      window.removeEventListener("augenblick:find-next", onFindNext);
-      window.removeEventListener("augenblick:find-prev", onFindPrev);
-      window.removeEventListener("augenblick:focus-editor", onFocusEditor);
-    };
-  }, [ensureView, openFindBar, refreshMatches, selectNextFrom, selectPrevFrom]);
+        CodeBlockLowlight.configure({ lowlight }),
+        TaskList,
+        TaskItem.configure({
+          nested: true,
+        }),
+        MarkdownImageText,
+        MarkdownTableText,
+        Placeholder.configure({
+          placeholder: "Start writing...",
+        }),
+        Markdown.configure({
+          indentation: { style: "space", size: 2 },
+          markedOptions: { gfm: true },
+        }),
+      ],
+      content: value,
+      contentType: "markdown",
+      editable: !readOnly,
+      onUpdate: ({ editor }) => {
+        const next = editor.getMarkdown();
+        if (next === lastMarkdownRef.current) return;
+        lastMarkdownRef.current = next;
+        if (!readOnlyRef.current) onChangeRef.current(next);
+      },
+      editorProps: {
+        handleDOMEvents: {
+          click: (_view, event) => {
+            const target = event.target as HTMLElement | null;
+            const anchor = target?.closest?.("a");
+            if (!anchor) return false;
+            const href = anchor.getAttribute("href") ?? "";
+            const mouseEvent = event as MouseEvent;
+            const metaKey = mouseEvent.metaKey;
+            const ctrlKey = mouseEvent.ctrlKey;
+            const shiftKey = mouseEvent.shiftKey;
+            const altKey = mouseEvent.altKey;
+            console.debug("tiptap:link-click", { href, metaKey, ctrlKey, shiftKey, altKey });
+            event.preventDefault();
+            if ((metaKey || ctrlKey) && href) {
+              console.debug("tiptap:link-open", { href });
+              void openLink(href);
+            }
+            return false;
+          },
+          paste: (_view, event) => {
+            if (readOnlyRef.current) return false;
+            const editorInstance = editorRef.current;
+            if (!editorInstance) return false;
+            if (!editorInstance.markdown) return false;
+            const clipboardData = event.clipboardData;
+            if (!clipboardData) return false;
+            const text = clipboardData.getData("text/plain");
+            if (!text) return false;
+            event.preventDefault();
+            const parsed = editorInstance.markdown.parse(text);
+            const content = Array.isArray(parsed.content) ? parsed.content : [];
+            console.debug("tiptap:paste-markdown", { length: text.length, nodes: content.length });
+            editorInstance.commands.insertContent(content);
+            return true;
+          },
+        },
+      },
+    },
+    [],
+  );
 
   useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!readOnly);
+  }, [editor, readOnly]);
+
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor) return;
     if (value === lastMarkdownRef.current) return;
     lastMarkdownRef.current = value;
-    const p = editorPromiseRef.current;
-    if (!p) return;
-    void p.then((editor) => {
-      editor.action(replaceAllMarkdown(value, true));
+    editor.commands.setContent(value, { contentType: "markdown" });
+  }, [editor, value]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const onFocusEditor = () => {
+      editor.commands.focus("end");
+    };
+    window.addEventListener("augenblick:focus-editor", onFocusEditor);
+    return () => {
+      window.removeEventListener("augenblick:focus-editor", onFocusEditor);
+    };
+  }, [editor]);
+
+  useEffect(() => {
+    if (!showLinkInput) return;
+    requestAnimationFrame(() => {
+      linkInputRef.current?.focus();
+      linkInputRef.current?.select();
     });
-  }, [value, replaceAllMarkdown]);
+  }, [showLinkInput]);
+
+  const openLinkInput = () => {
+    if (!editor || readOnlyRef.current) return;
+    const { from, to } = editor.state.selection;
+    linkSelectionRef.current = { from, to };
+    const previous = editor.getAttributes("link").href as string | undefined;
+    linkActiveRef.current = Boolean(previous);
+    setLinkValue(previous ?? "");
+    setShowLinkInput(true);
+  };
+
+  const closeLinkInput = () => {
+    linkActiveRef.current = false;
+    setShowLinkInput(false);
+    setLinkValue("");
+  };
+
+  const applyLink = () => {
+    if (!editor || readOnlyRef.current) return;
+    const trimmed = linkValue.trim();
+    const { from, to } = linkSelectionRef.current;
+    const chain = editor.chain().focus().setTextSelection({ from, to });
+    if (!trimmed) {
+      chain.extendMarkRange("link").unsetLink().run();
+      closeLinkInput();
+      return;
+    }
+    if (from === to && !linkActiveRef.current) {
+      chain
+        .insertContent({
+          type: "text",
+          text: trimmed,
+          marks: [{ type: "link", attrs: { href: trimmed } }],
+        })
+        .run();
+      closeLinkInput();
+      return;
+    }
+    chain.extendMarkRange("link").setLink({ href: trimmed }).run();
+    closeLinkInput();
+  };
+
+  const removeLink = () => {
+    if (!editor || readOnlyRef.current) return;
+    const { from, to } = linkSelectionRef.current;
+    editor.chain().focus().setTextSelection({ from, to }).extendMarkRange("link").unsetLink().run();
+    closeLinkInput();
+  };
+
+  const onLinkInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      applyLink();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeLinkInput();
+    }
+  };
 
   return (
     <div className="h-full overflow-auto" style={{ background: "var(--bg-primary)" }}>
@@ -835,119 +245,92 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
         className="mx-auto flex h-full max-w-[720px] flex-col px-10"
         style={{ paddingTop: "var(--titlebar-inset, 0px)", paddingBottom: 24 }}
       >
-        {showFind ? (
-          <div
-            className="sticky top-0 z-10 -mx-10 mb-4 border-b px-10 py-2"
-            style={{ borderColor: "var(--border-default)", background: "var(--bg-primary)" }}
+        {editor && !readOnly ? (
+          <BubbleMenu
+            editor={editor}
+            className="tiptap-bubble"
+            options={{
+              duration: 150,
+              interactive: true,
+              onHide: closeLinkInput,
+            }}
+            shouldShow={({ state, editor }) => showLinkInput || !state.selection.empty || editor.isActive("link")}
           >
-            <div className="flex items-center gap-2">
-              <input
-                ref={findInputRef}
-                value={query}
-                placeholder="Find"
-                className="h-9 flex-1 rounded-md border px-3 text-[13px] outline-none"
-                style={{
-                  borderColor: "var(--border-default)",
-                  background: "var(--bg-secondary)",
-                  color: "var(--text-primary)",
-                }}
-                onChange={(e) => onFindInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") closeFind();
-                  if (e.key !== "Enter") return;
-                  e.preventDefault();
-                  refreshMatches();
-                  const view = viewRef.current;
-                  if (!view) return;
-                  if (e.shiftKey) selectPrevFrom(view.state.selection.from);
-                  else selectNextFrom(view.state.selection.to);
-                }}
-              />
-
-              <div className="w-[56px] text-right text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                {matches.length === 0 ? "0/0" : `${cursor + 1}/${matches.length}`}
-              </div>
-
+            <button
+              type="button"
+              className="tiptap-bubble-btn"
+              data-active={editor.isActive("bold") || undefined}
+              aria-pressed={editor.isActive("bold")}
+              aria-label="Bold"
+              onClick={() => editor.chain().focus().toggleBold().run()}
+            >
+              <Icon name="bold" size={16} />
+            </button>
+            <button
+              type="button"
+              className="tiptap-bubble-btn"
+              data-active={editor.isActive("italic") || undefined}
+              aria-pressed={editor.isActive("italic")}
+              aria-label="Italic"
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+            >
+              <Icon name="italic" size={16} />
+            </button>
+            <button
+              type="button"
+              className="tiptap-bubble-btn"
+              data-active={editor.isActive("strike") || undefined}
+              aria-pressed={editor.isActive("strike")}
+              aria-label="Strike"
+              onClick={() => editor.chain().focus().toggleStrike().run()}
+            >
+              <Icon name="strike" size={16} />
+            </button>
+            <button
+              type="button"
+              className="tiptap-bubble-btn"
+              data-active={editor.isActive("code") || undefined}
+              aria-pressed={editor.isActive("code")}
+              aria-label="Code"
+              onClick={() => editor.chain().focus().toggleCode().run()}
+            >
+              <Icon name="code" size={16} />
+            </button>
+            {showLinkInput ? null : (
               <button
                 type="button"
-                className="h-9 rounded-md px-3 text-[13px] hover:bg-[var(--bg-tertiary)]"
-                onClick={() => {
-                  refreshMatches();
-                  const view = viewRef.current;
-                  if (!view) return;
-                  selectPrevFrom(view.state.selection.from);
-                }}
-                disabled={matches.length === 0}
+                className="tiptap-bubble-btn"
+                data-active={editor.isActive("link") || undefined}
+                aria-pressed={editor.isActive("link")}
+                aria-label="Link"
+                onClick={openLinkInput}
               >
-                Prev
+                <Icon name="link" size={16} />
               </button>
-              <button
-                type="button"
-                className="h-9 rounded-md px-3 text-[13px] hover:bg-[var(--bg-tertiary)]"
-                onClick={() => {
-                  refreshMatches();
-                  const view = viewRef.current;
-                  if (!view) return;
-                  selectNextFrom(view.state.selection.to);
-                }}
-                disabled={matches.length === 0}
-              >
-                Next
-              </button>
-
-              <button
-                type="button"
-                className="h-9 w-9 rounded-md hover:bg-[var(--bg-tertiary)]"
-                aria-label="Close Find"
-                onClick={closeFind}
-              >
-                <Icon name="x" />
-              </button>
-            </div>
-
-            {showReplace ? (
-              <div className="mt-2 flex items-center gap-2">
+            )}
+            {showLinkInput ? (
+              <div className="tiptap-link-input-wrap">
                 <input
-                  ref={replaceInputRef}
-                  value={replaceWith}
-                  placeholder="Replace"
-                  className="h-9 flex-1 rounded-md border px-3 text-[13px] outline-none"
-                  style={{
-                    borderColor: "var(--border-default)",
-                    background: "var(--bg-secondary)",
-                    color: "var(--text-primary)",
-                  }}
-                  onChange={(e) => setReplaceWith(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") closeFind();
-                    if (e.key !== "Enter") return;
-                    e.preventDefault();
-                    replaceCurrent();
-                  }}
+                  ref={linkInputRef}
+                  className="tiptap-link-input"
+                  type="url"
+                  placeholder="Paste link"
+                  value={linkValue}
+                  onChange={(event) => setLinkValue(event.target.value)}
+                  onKeyDown={onLinkInputKeyDown}
                 />
-                <button
-                  type="button"
-                  className="h-9 rounded-md px-3 text-[13px] hover:bg-[var(--bg-tertiary)]"
-                  onClick={replaceCurrent}
-                  disabled={matches.length === 0}
-                >
-                  Replace
+                <button type="button" className="tiptap-bubble-btn" aria-label="Apply link" onClick={applyLink}>
+                  <Icon name="save" size={14} />
                 </button>
-                <button
-                  type="button"
-                  className="h-9 rounded-md px-3 text-[13px] hover:bg-[var(--bg-tertiary)]"
-                  onClick={replaceAll}
-                  disabled={matches.length === 0}
-                >
-                  All
+                <button type="button" className="tiptap-bubble-btn" aria-label="Remove link" onClick={removeLink}>
+                  <Icon name="x" size={14} />
                 </button>
               </div>
             ) : null}
-          </div>
+          </BubbleMenu>
         ) : null}
-
         <div className="flex-1">
-          <div ref={containerRef} className="h-full" />
+          <EditorContent editor={editor} className="h-full" />
         </div>
       </div>
     </div>

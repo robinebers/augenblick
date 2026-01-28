@@ -24,17 +24,9 @@ export default defineConfig(async () => ({
       output: {
         manualChunks: (id) => {
           if (!id.includes("node_modules")) return;
-          if (id.includes("/@milkdown/")) return "milkdown";
-          if (id.includes("/prosemirror-")) return "prosemirror";
-          if (
-            id.includes("/remark-") ||
-            id.includes("/micromark") ||
-            id.includes("/mdast-") ||
-            id.includes("/hast-") ||
-            id.includes("/unified") ||
-            id.includes("/vfile")
-          )
-            return "markdown";
+          if (id.includes("/@tiptap/pm/") || id.includes("/prosemirror-")) return "prosemirror";
+          if (id.includes("/@tiptap/")) return "tiptap";
+          if (id.includes("/marked")) return "markdown";
         },
       },
     },
