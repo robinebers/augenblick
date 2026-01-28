@@ -255,6 +255,7 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
               onHide: closeLinkInput,
             }}
             shouldShow={({ state }) => {
+              if (!state.doc.textContent.trim().length) return false;
               if (showLinkInput) return true;
               const { selection } = state;
               const { from, to, empty } = selection;
@@ -263,8 +264,6 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
                 const selectedText = state.doc.textBetween(from, to, " ", " ");
                 return selectedText.trim().length > 0;
               }
-
-              if (!state.doc.textContent.trim().length) return false;
 
               const linkMark = state.schema.marks.link;
               if (!linkMark || !("$from" in selection)) return false;
