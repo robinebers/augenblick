@@ -4,10 +4,14 @@ import { render } from "@/test/utils/render";
 
 let lastConfig: any = null;
 let editorMock: any = null;
+let bubbleProps: any = null;
 const openExternalMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@tiptap/react/menus", () => ({
-  BubbleMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  BubbleMenu: (props: { children: React.ReactNode }) => {
+    bubbleProps = props;
+    return <div>{props.children}</div>;
+  },
 }));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
@@ -66,6 +70,7 @@ describe("Editor", () => {
       },
     };
     openExternalMock.mockClear();
+    bubbleProps = null;
   });
 
   afterEach(() => {
@@ -162,6 +167,31 @@ describe("Editor", () => {
     expect(promptSpy).not.toHaveBeenCalled();
 
     promptSpy.mockRestore();
+    await unmount();
+  });
+
+  it("hides bubble menu on empty doc even if link mark is active", async () => {
+    const onChange = vi.fn();
+
+    const { unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "",
+        onChange,
+      }),
+    );
+
+    const shouldShow = bubbleProps?.shouldShow;
+    const linkMark = { name: "link" };
+    expect(
+      shouldShow({
+        state: {
+          selection: { empty: true, from: 0, to: 0, $from: { marks: () => [] } },
+          doc: { textContent: "", textBetween: () => "" },
+          schema: { marks: { link: linkMark } },
+        },
+      }),
+    ).toBe(false);
+
     await unmount();
   });
 
