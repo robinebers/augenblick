@@ -7,6 +7,10 @@ const check = vi.fn(async () => ({ version: "0.1.1", downloadAndInstall }));
 const relaunch = vi.fn(async () => {});
 
 let lastOnCheckUpdates: (() => void) | null = null;
+let lastRestartAction: (() => void) | null = null;
+
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
 
 vi.mock("@tauri-apps/plugin-updater", () => ({ check }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch }));
@@ -34,6 +38,20 @@ vi.mock("@/features/settings/SettingsDialog", () => ({
   SettingsDialog: (props: any) => {
     lastOnCheckUpdates = props.onCheckUpdates;
     return <button onClick={props.onCheckUpdates}>Check for updates</button>;
+  },
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: (message: any, options?: any) => {
+      toastSuccess(message, options);
+      if (options?.action?.onClick) {
+        lastRestartAction = options.action.onClick;
+      }
+    },
+    error: (message: any, options?: any) => {
+      toastError(message, options);
+    },
   },
 }));
 
@@ -90,9 +108,12 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe("App updater", () => {
   beforeEach(() => {
     lastOnCheckUpdates = null;
+    lastRestartAction = null;
     downloadAndInstall.mockClear();
     check.mockClear();
     relaunch.mockClear();
+    toastSuccess.mockClear();
+    toastError.mockClear();
   });
 
   it("checks for updates when manual check is triggered", async () => {
@@ -117,16 +138,14 @@ describe("App updater", () => {
 
     // Manual check should call the updater check function
     expect(check).toHaveBeenCalled();
-    // downloadAndInstall is only called when user clicks the toast action button
-    // (not automatically triggered)
+    expect(downloadAndInstall).toHaveBeenCalled();
+    expect(typeof lastRestartAction).toBe("function");
+    expect(relaunch).not.toHaveBeenCalled();
 
     await unmount();
   });
 
   it("calls relaunch after downloadAndInstall completes", async () => {
-    // This tests the performUpdate flow directly
-    downloadAndInstall.mockResolvedValueOnce(undefined);
-
     const App = (await import("@/App")).default;
     const { unmount } = await render(React.createElement(App));
 
@@ -134,15 +153,27 @@ describe("App updater", () => {
       await flush();
     });
 
-    // Trigger check to populate pendingUpdateRef
+    await act(async () => {
+      (globalThis as any).__TAURI_EMIT__("menu-settings");
+      await flush();
+    });
+
+    expect(typeof lastOnCheckUpdates).toBe("function");
+
     await act(async () => {
       lastOnCheckUpdates?.();
       await flush();
     });
 
-    // Note: The actual update flow is triggered by clicking the toast action
-    // which would call performUpdate(). Testing the full flow would require
-    // either exposing performUpdate or simulating toast action click.
+    expect(downloadAndInstall).toHaveBeenCalled();
+    expect(typeof lastRestartAction).toBe("function");
+
+    await act(async () => {
+      lastRestartAction?.();
+      await flush();
+    });
+
+    expect(relaunch).toHaveBeenCalled();
 
     await unmount();
   });

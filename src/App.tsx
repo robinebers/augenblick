@@ -39,6 +39,9 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
 
+  const updateCheckInFlightRef = useRef(false);
+  const updateCheckTimeoutIdRef = useRef<number | null>(null);
+
   const list = useNotesStore((s) => s.list);
   const selectedId = useNotesStore((s) => s.selectedId);
   const viewMode = useNotesStore((s) => s.viewMode);
@@ -86,50 +89,54 @@ function App() {
 
   const hasCheckedOnLaunchRef = useRef(false);
 
-  const checkForUpdates = useCallback(
-    async (options: { silent?: boolean } = {}) => {
-      if (isCheckingUpdates) return;
+  const checkForUpdates = useCallback(async (options: { silent?: boolean } = {}) => {
+    if (updateCheckInFlightRef.current) return;
 
-      setIsCheckingUpdates(true);
-      try {
-        const update = await check();
-        if (!update) {
-          if (!options.silent) {
-            toast.success("You're up to date.");
-          }
-          return;
-        }
+    updateCheckInFlightRef.current = true;
+    setIsCheckingUpdates(true);
 
-        // Download and install immediately (silently)
-        await update.downloadAndInstall();
-
-        // Show simple toast with Restart button
-        toast.success("New version ready to install", {
-          action: {
-            label: "Restart",
-            onClick: () => {
-              relaunch().catch((err) => {
-                toast.error("Restart failed", {
-                  description: "Please restart the app manually to apply the update.",
-                });
-                console.error("Relaunch failed:", err);
-              });
-            },
-          },
-          duration: Infinity,
-        });
-      } catch (err) {
+    try {
+      const update = await check();
+      if (!update) {
         if (!options.silent) {
-          toast.error("Update failed", { description: String(err) });
+          toast.success("You're up to date.");
         }
-      } finally {
-        setIsCheckingUpdates(false);
+        return;
       }
-    },
-    [isCheckingUpdates],
-  );
+
+      // Download and install immediately (silently)
+      await update.downloadAndInstall();
+
+      // Show simple toast with Restart button
+      toast.success("New version ready to install", {
+        action: {
+          label: "Restart",
+          onClick: () => {
+            relaunch().catch((err) => {
+              toast.error("Restart failed", {
+                description: "Please restart the app manually to apply the update.",
+              });
+              console.error("Relaunch failed:", err);
+            });
+          },
+        },
+        duration: Infinity,
+      });
+    } catch (err) {
+      if (!options.silent) {
+        toast.error("Update failed", { description: String(err) });
+      }
+    } finally {
+      updateCheckInFlightRef.current = false;
+      setIsCheckingUpdates(false);
+    }
+  }, []);
 
   const handleCheckUpdates = useCallback(() => {
+    if (updateCheckTimeoutIdRef.current != null) {
+      window.clearTimeout(updateCheckTimeoutIdRef.current);
+      updateCheckTimeoutIdRef.current = null;
+    }
     void checkForUpdates({ silent: false });
   }, [checkForUpdates]);
 
@@ -184,7 +191,10 @@ function App() {
       // Check for updates on launch (silent - only shows toast if update ready)
       if (!hasCheckedOnLaunchRef.current) {
         hasCheckedOnLaunchRef.current = true;
-        setTimeout(() => void checkForUpdates({ silent: true }), 2000);
+        updateCheckTimeoutIdRef.current = window.setTimeout(() => {
+          updateCheckTimeoutIdRef.current = null;
+          void checkForUpdates({ silent: true });
+        }, 2000);
       }
 
       unlistenMenuOpen = await listen("menu-open-markdown", () => {
@@ -290,6 +300,10 @@ function App() {
     return () => {
       window.clearInterval(heartbeat);
       window.removeEventListener("keydown", onKeyDown);
+      if (updateCheckTimeoutIdRef.current != null) {
+        window.clearTimeout(updateCheckTimeoutIdRef.current);
+        updateCheckTimeoutIdRef.current = null;
+      }
       unlistenClose?.();
       unlistenMenuOpen?.();
       unlistenMenuNew?.();
@@ -298,8 +312,7 @@ function App() {
       unlistenMenuTrash?.();
       unlistenMenuSettings?.();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- checkForUpdates excluded: only runs once on launch via ref guard
-  }, [actions, runOrAlert]);
+  }, [actions, checkForUpdates, runOrAlert]);
 
   return (
     <ErrorBoundary>
