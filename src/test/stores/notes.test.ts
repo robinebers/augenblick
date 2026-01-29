@@ -27,7 +27,7 @@ vi.mock("@/lib/api", () => ({ api: apiMock }));
 function meta(overrides: Partial<NoteMeta>): NoteMeta {
   return {
     id: "id",
-    title: "New Note",
+    title: "New note",
     preview: "",
     filePath: "/tmp/id.md",
     storage: "draft",

@@ -114,7 +114,7 @@ describe("Sidebar", () => {
     expect(noteItemSpy).toHaveBeenCalledWith(expect.objectContaining({ expiryMinutes: 60 }));
 
     const newButton = Array.from(container.querySelectorAll("button")).find((btn) =>
-      btn.textContent?.includes("New Note"),
+      btn.textContent?.includes("New note"),
     );
     newButton?.click();
     expect(onNewNote).toHaveBeenCalled();

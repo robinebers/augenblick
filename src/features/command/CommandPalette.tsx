@@ -53,7 +53,7 @@ export function CommandPalette({
     () => [
       {
         id: "new-note",
-        label: "New Note",
+        label: "New note",
         icon: "file-text",
         shortcut: "⌘N",
         keywords: ["new", "note"],
