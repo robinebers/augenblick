@@ -34,7 +34,7 @@ function deriveTitlePreview(content: string): Pick<NoteMeta, "title" | "preview"
     if (trimmed.startsWith("\\") && next && "#->*".includes(next)) {
       return trimmed.slice(1).trim();
     }
-    return trimmed.replace(/^[#>\-*\s]+/, "").trim();
+    return trimmed.replace(/^[#>\-*]+/, "").trim();
   };
 
   const decodeEntities = (s: string) =>
