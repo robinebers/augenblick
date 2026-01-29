@@ -35,9 +35,15 @@ It's not about losing information, it's about not drowning in it.
 | Save As         | `⇧⌘S`    |
 | Open/Import     | `⌘O`     |
 | Pin/Unpin       | `⌘P`     |
-| Trash note      | `⌘W`     |
+| Trash note      | `Delete` |
+| Hide window     | `⌘W`     |
 | Command palette | `⌘K`     |
 | Settings        | `⌘,`     |
+
+## Tray
+
+- Left click shows all notes
+- Right click opens the tray menu
 
 
 ## Built With AI

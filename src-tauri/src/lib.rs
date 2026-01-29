@@ -58,7 +58,7 @@ pub fn run() {
                 .accelerator("CmdOrCtrl+KeyO")
                 .build(app)
                 .map_err(|err| std::io::Error::other(err.to_string()))?;
-            let new_note_item = MenuItemBuilder::with_id("file_new_note", "New Note")
+            let new_note_item = MenuItemBuilder::with_id("file_new_note", "New note")
                 .accelerator("CmdOrCtrl+KeyN")
                 .build(app)
                 .map_err(|err| std::io::Error::other(err.to_string()))?;
@@ -71,7 +71,7 @@ pub fn run() {
                 .build(app)
                 .map_err(|err| std::io::Error::other(err.to_string()))?;
             let trash_note_item = MenuItemBuilder::with_id("file_trash_note", "Move to Trash")
-                .accelerator("CmdOrCtrl+KeyW")
+                .accelerator("Delete")
                 .build(app)
                 .map_err(|err| std::io::Error::other(err.to_string()))?;
             let file_menu = SubmenuBuilder::new(app, "File")
@@ -137,6 +137,11 @@ pub fn run() {
                     return;
                 }
 
+                if id == "tray_show_all" {
+                    let _ = app_handle.emit("tray-show-all", ());
+                    return;
+                }
+
                 if let Some(note_id) = id.strip_prefix(TRAY_NOTE_PREFIX) {
                     let _ = app_handle.emit("tray-select-note", note_id.to_string());
                     return;
@@ -192,11 +197,19 @@ pub fn run() {
                 .icon(tray_icon)
                 .icon_as_template(true)
                 .menu(&tray_menu)
+                .show_menu_on_left_click(false)
                 .on_tray_icon_event(|tray, event| {
                     if matches!(event, TrayIconEvent::Enter { .. }) {
                         if let Ok(menu) = build_tray_menu(tray.app_handle()) {
                             let _ = tray.set_menu(Some(menu));
                         }
+                    }
+                    if let TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        ..
+                    } = event
+                    {
+                        let _ = tray.app_handle().emit("tray-show-all", ());
                     }
                 })
                 .build(&app_handle)
@@ -248,7 +261,7 @@ fn build_tray_menu<R: tauri::Runtime>(
     recent.sort_by(|a, b| b.last_interaction.cmp(&a.last_interaction));
     recent.truncate(5);
 
-    let mut menu = MenuBuilder::new(app_handle).text("tray_new_note", "New Note");
+    let mut menu = MenuBuilder::new(app_handle).text("tray_new_note", "New note");
 
     if !pinned.is_empty() {
         let pinned_header = MenuItemBuilder::new("Pinned")
@@ -272,7 +285,10 @@ fn build_tray_menu<R: tauri::Runtime>(
         }
     }
 
-    menu = menu.separator().text("tray_quit", "Quit Augenblick");
+    menu = menu
+        .separator()
+        .text("tray_show_all", "Show all notes")
+        .text("tray_quit", "Quit Augenblick");
 
     menu.build().map_err(|err| err.to_string())
 }
@@ -281,8 +297,9 @@ fn build_basic_tray_menu<R: tauri::Runtime>(
     app_handle: &AppHandle<R>,
 ) -> Result<tauri::menu::Menu<R>, String> {
     MenuBuilder::new(app_handle)
-        .text("tray_new_note", "New Note")
+        .text("tray_new_note", "New note")
         .separator()
+        .text("tray_show_all", "Show all notes")
         .text("tray_quit", "Quit Augenblick")
         .build()
         .map_err(|err| err.to_string())

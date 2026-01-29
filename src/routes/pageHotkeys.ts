@@ -123,12 +123,6 @@ export function createPageKeydownHandler(deps: Deps) {
       return;
     }
 
-    if (key === "w") {
-      e.preventDefault();
-      deps.closeCurrent();
-      return;
-    }
-
     if (key === "o") {
       e.preventDefault();
       deps.openMarkdown();
