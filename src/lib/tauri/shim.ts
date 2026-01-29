@@ -27,22 +27,37 @@ function deriveTitlePreview(content: string): Pick<NoteMeta, "title" | "preview"
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
-  const first = lines[0] ?? "";
+
   const sanitize = (line: string) => {
     const trimmed = line.trimStart();
     const next = trimmed[1];
     if (trimmed.startsWith("\\") && next && "#->*".includes(next)) {
       return trimmed.slice(1).trim();
     }
-    return trimmed.replace(/^[#>\-*\\s]+/, "").trim();
+    return trimmed.replace(/^[#>\-*\s]+/, "").trim();
   };
+
+  const decodeEntities = (s: string) =>
+    s
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+
+  const stripEscapes = (s: string) => s.replace(/\\([\\`*_{}[\]()#+\-.!>~|])/g, "$1");
+
+  const clean = (line: string) => decodeEntities(stripEscapes(sanitize(line))).trim();
+
   const truncate = (s: string, maxLen: number) => (s.length <= maxLen ? s : s.slice(0, maxLen));
 
-  const titleRaw = sanitize(first);
-  const title = truncate(titleRaw.length === 0 ? "New Note" : titleRaw, 80);
+  const titleLine = lines.find((l) => clean(l).length > 0) ?? "";
+  const titleRaw = clean(titleLine);
+  const title = truncate(titleRaw.length === 0 ? "New note" : titleRaw, 80);
 
-  const previewSource = lines[1] ?? first;
-  const preview = truncate(sanitize(previewSource).split(/\s+/).join(" "), 140);
+  const previewLine = lines.find((l) => l !== titleLine && clean(l).length > 0) ?? titleLine;
+  const preview = truncate(clean(previewLine).split(/\s+/).join(" "), 140);
 
   return { title, preview };
 }
@@ -105,7 +120,7 @@ async function invokeWeb(cmd: string, args: Record<string, unknown> | undefined)
       const t = now();
       const meta: NoteMeta = {
         id,
-        title: "New Note",
+        title: "New note",
         preview: "",
         filePath: `web://draft/${id}.md`,
         storage: "draft",
