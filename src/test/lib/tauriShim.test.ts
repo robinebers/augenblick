@@ -99,7 +99,47 @@ describe("tauri web shim", () => {
       id: created.id,
       content: "\n\n",
     })) as { title: string };
-    expect(empty.title).toBe("New Note");
+    expect(empty.title).toBe("New note");
+  });
+
+  it("falls back when content is only whitespace entities", async () => {
+    const created = (await invoke("note_create")) as { id: string };
+    const updated = (await invoke("note_write_draft", {
+      id: created.id,
+      content: "&nbsp;",
+    })) as { title: string };
+
+    expect(updated.title).toBe("New note");
+  });
+
+  it("decodes HTML entities in titles", async () => {
+    const created = (await invoke("note_create")) as { id: string };
+    const updated = (await invoke("note_write_draft", {
+      id: created.id,
+      content: "Hello&nbsp;World",
+    })) as { title: string };
+
+    expect(updated.title).toBe("Hello World");
+  });
+
+  it("strips markdown escape sequences from titles", async () => {
+    const created = (await invoke("note_create")) as { id: string };
+    const updated = (await invoke("note_write_draft", {
+      id: created.id,
+      content: "Hello \\*world\\*",
+    })) as { title: string };
+
+    expect(updated.title).toBe("Hello *world*");
+  });
+
+  it("skips non-text lines like --- for title", async () => {
+    const created = (await invoke("note_create")) as { id: string };
+    const updated = (await invoke("note_write_draft", {
+      id: created.id,
+      content: "---\nActual title",
+    })) as { title: string; preview: string };
+
+    expect(updated.title).toBe("Actual title");
   });
 
   it("uses fallback save path and rejects auto-save for saved notes", async () => {

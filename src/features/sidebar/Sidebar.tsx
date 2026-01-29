@@ -271,7 +271,7 @@ export function Sidebar({
               onClick={onNewNote}
             >
               <Icon name="file-text" className="text-[var(--text-secondary)]" />
-              New Note
+              New note
             </button>
 
             <button

@@ -32,7 +32,7 @@ INSERT INTO notes (
 "#,
         params![
             id,
-            "New Note",
+            "New note",
             "",
             file_path.to_string_lossy(),
             storage_to_db(NoteStorage::Draft),
@@ -45,7 +45,7 @@ INSERT INTO notes (
 
     Ok(NoteMeta {
         id,
-        title: "New Note".to_string(),
+        title: "New note".to_string(),
         preview: "".to_string(),
         file_path: file_path.to_string_lossy().to_string(),
         storage: NoteStorage::Draft,

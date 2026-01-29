@@ -202,21 +202,23 @@ function App() {
   }, []);
 
   useEffect(() => {
-    let unlistenClose: (() => void) | null = null;
-    let unlistenMenuOpen: (() => void) | null = null;
-    let unlistenMenuNew: (() => void) | null = null;
-    let unlistenMenuSave: (() => void) | null = null;
-    let unlistenMenuSaveAs: (() => void) | null = null;
-    let unlistenMenuTrash: (() => void) | null = null;
-    let unlistenMenuSettings: (() => void) | null = null;
-    let unlistenTrayNew: (() => void) | null = null;
-    let unlistenTraySelect: (() => void) | null = null;
-    let unlistenTrayQuit: (() => void) | null = null;
     let isClosing = false;
+    let disposed = false;
+    const unlisteners: Array<() => void> = [];
+    const registerUnlisten = (unlisten: (() => void) | null | undefined) => {
+      if (!unlisten) return;
+      if (disposed) {
+        unlisten();
+        return;
+      }
+      unlisteners.push(unlisten);
+    };
 
     void runOrAlert(async () => {
       await useSettingsStore.getState().init();
+      if (disposed) return;
       await useNotesStore.getState().init();
+      if (disposed) return;
 
       // Check for updates on launch (silent - only shows toast if update ready)
       if (!hasCheckedOnLaunchRef.current) {
@@ -227,51 +229,61 @@ function App() {
         }, 2000);
       }
 
-      unlistenMenuOpen = await listen("menu-open-markdown", () => {
+      if (disposed) return;
+      registerUnlisten(await listen("menu-open-markdown", () => {
         void runOrAlert(() => actions.openMarkdown());
-      });
-      unlistenMenuNew = await listen("menu-new-note", () => {
+      }));
+      if (disposed) return;
+      registerUnlisten(await listen("menu-new-note", () => {
         void runOrAlert(() => useNotesStore.getState().createNote());
-      });
-      unlistenMenuSave = await listen("menu-save", () => {
+      }));
+      if (disposed) return;
+      registerUnlisten(await listen("menu-save", () => {
         void runOrAlert(() => actions.saveCurrent());
-      });
-      unlistenMenuSaveAs = await listen("menu-save-as", () => {
+      }));
+      if (disposed) return;
+      registerUnlisten(await listen("menu-save-as", () => {
         void runOrAlert(() => actions.saveAs());
-      });
-      unlistenMenuTrash = await listen("menu-trash", () => {
+      }));
+      if (disposed) return;
+      registerUnlisten(await listen("menu-trash", () => {
         void runOrAlert(() => actions.closeCurrent());
-      });
-      unlistenMenuSettings = await listen("menu-settings", () => {
+      }));
+      if (disposed) return;
+      registerUnlisten(await listen("menu-settings", () => {
         setShowSettings(true);
-      });
+      }));
 
-      unlistenTrayNew = await listen("tray-new-note", () => {
+      if (disposed) return;
+      registerUnlisten(await listen("tray-new-note", () => {
         void runOrAlert(async () => {
           await useNotesStore.getState().createNote();
           await showMainWindow();
         });
-      });
+      }));
 
-      unlistenTraySelect = await listen<string>("tray-select-note", (event) => {
+      if (disposed) return;
+      registerUnlisten(await listen<string>("tray-select-note", (event) => {
         const id = event.payload;
         if (!id) return;
         void runOrAlert(async () => {
           await useNotesStore.getState().select(id);
           await showMainWindow();
         });
-      });
+      }));
 
-      unlistenTrayQuit = await listen("tray-quit", () => {
+      if (disposed) return;
+      registerUnlisten(await listen("tray-quit", () => {
         void runOrAlert(async () => {
           await showMainWindow();
           const shouldQuit = await confirmUnsaved("Quit Augenblick?");
           if (!shouldQuit) return;
           await api.appExit();
         });
-      });
+      }));
 
-      unlistenClose = await getCurrentWindow().onCloseRequested(async (event) => {
+      if (disposed) return;
+      registerUnlisten(await getCurrentWindow().onCloseRequested(async (event) => {
         event.preventDefault();
         if (isClosing) return;
         isClosing = true;
@@ -282,7 +294,7 @@ function App() {
         } finally {
           isClosing = false;
         }
-      });
+      }));
     });
 
     const heartbeat = window.setInterval(() => {
@@ -341,22 +353,16 @@ function App() {
     window.addEventListener("keydown", onKeyDown);
 
     return () => {
+      disposed = true;
       window.clearInterval(heartbeat);
       window.removeEventListener("keydown", onKeyDown);
       if (updateCheckTimeoutIdRef.current != null) {
         window.clearTimeout(updateCheckTimeoutIdRef.current);
         updateCheckTimeoutIdRef.current = null;
       }
-      unlistenClose?.();
-      unlistenMenuOpen?.();
-      unlistenMenuNew?.();
-      unlistenMenuSave?.();
-      unlistenMenuSaveAs?.();
-      unlistenMenuTrash?.();
-      unlistenMenuSettings?.();
-      unlistenTrayNew?.();
-      unlistenTraySelect?.();
-      unlistenTrayQuit?.();
+      for (const unlisten of unlisteners.splice(0)) {
+        unlisten();
+      }
     };
   }, [actions, checkForUpdates, confirmUnsaved, runOrAlert, showMainWindow]);
 
@@ -446,7 +452,7 @@ function App() {
                 <EmptyContent>
                   <div className="flex gap-2">
                     <Button onClick={() => void runOrAlert(() => useNotesStore.getState().createNote())}>
-                      New Note
+                      New note
                     </Button>
                     <Button variant="outline" onClick={() => void runOrAlert(() => actions.openMarkdown())}>
                       Open File
