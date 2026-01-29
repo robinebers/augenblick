@@ -91,5 +91,5 @@ jobs:
           releaseName: ${{ env.RELEASE_TAG }}
           releaseDraft: false
           prerelease: false
-          uploadUpdaterJson: true
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
