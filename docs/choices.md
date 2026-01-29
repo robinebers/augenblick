@@ -27,3 +27,6 @@
 - Disable tables/images: remove Tiptap table/image extensions; keep raw markdown via `table`/`image` token handlers + `white-space: pre-wrap`.
 - Link opening: use Tauri `plugin-opener` on Cmd/Ctrl-click; fallback to `window.open`.
 - Paste: intercept plain-text paste and insert as markdown (`contentType: "markdown"`).
+
+## 2026-01-29
+- Expiry sync: run `expiry_run_now` before initial notes load; schedule next sweep at nearest unpinned note expiry to keep UI list in sync.

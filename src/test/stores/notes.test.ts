@@ -48,6 +48,7 @@ describe("notesStore", () => {
     Object.values(apiMock).forEach((fn) => fn.mockReset());
     apiMock.noteSetActive.mockResolvedValue(undefined);
     apiMock.appStateSet.mockResolvedValue(undefined);
+    apiMock.expiryRunNow.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -73,6 +74,10 @@ describe("notesStore", () => {
     expect(state.selectedId).toBe("n1");
     expect(state.contentById.n1).toBe("hello");
     expect(apiMock.noteSetActive).toHaveBeenCalledWith("n1");
+    expect(apiMock.expiryRunNow).toHaveBeenCalled();
+    expect(apiMock.expiryRunNow.mock.invocationCallOrder[0]).toBeLessThan(
+      apiMock.notesList.mock.invocationCallOrder[0],
+    );
   });
 
   it("clears selectedId when missing from list", async () => {
@@ -83,6 +88,19 @@ describe("notesStore", () => {
     await useNotesStore.getState().init();
 
     expect(useNotesStore.getState().selectedId).toBeNull();
+  });
+
+  it("runs expiry sweep and refreshes list", async () => {
+    const n1 = meta({ id: "n1", storage: "draft", sortOrder: 1 });
+
+    apiMock.notesList.mockResolvedValue({ active: [n1], trashed: [] });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().runExpirySweep();
+
+    expect(apiMock.expiryRunNow).toHaveBeenCalledTimes(1);
+    expect(apiMock.notesList).toHaveBeenCalledTimes(1);
+    expect(useNotesStore.getState().list.active.map((n) => n.id)).toEqual(["n1"]);
   });
 
   it("creates draft note, writes app state, and debounces draft autosave", async () => {

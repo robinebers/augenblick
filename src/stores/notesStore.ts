@@ -32,6 +32,7 @@ type NotesState = {
   undoReorder: () => Promise<void>;
   redoReorder: () => Promise<void>;
   heartbeatSelected: () => Promise<void>;
+  runExpirySweep: () => Promise<void>;
 };
 
 const DEFAULT_STATE: Omit<
@@ -56,6 +57,7 @@ const DEFAULT_STATE: Omit<
   | "undoReorder"
   | "redoReorder"
   | "heartbeatSelected"
+  | "runExpirySweep"
 > = {
   list: { active: [], trashed: [] },
   selectedId: null,
@@ -163,6 +165,8 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   ...DEFAULT_STATE,
   init: async () => {
     set({ loading: true });
+
+    await api.expiryRunNow();
 
     const [list, appState] = await Promise.all([api.notesList(), api.appStateGetAll()]);
 
@@ -452,5 +456,9 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     } catch (err) {
       console.error("Heartbeat failed:", err);
     }
+  },
+  runExpirySweep: async () => {
+    await api.expiryRunNow();
+    await get().refresh();
   },
 }));

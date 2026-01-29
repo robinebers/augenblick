@@ -202,6 +202,26 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const expiryMs = Math.max(1, expiryMinutes) * 60_000;
+    let nextExpiryAt: number | null = null;
+
+    for (const note of list.active) {
+      if (note.isPinned) continue;
+      const noteExpiry = note.lastInteraction + expiryMs;
+      if (nextExpiryAt === null || noteExpiry < nextExpiryAt) nextExpiryAt = noteExpiry;
+    }
+
+    if (nextExpiryAt === null) return;
+
+    const delay = Math.max(0, nextExpiryAt - Date.now());
+    const timer = window.setTimeout(() => {
+      void runOrAlert(() => useNotesStore.getState().runExpirySweep());
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [expiryMinutes, list.active, runOrAlert]);
+
+  useEffect(() => {
     let unlistenClose: (() => void) | null = null;
     let unlistenMenuOpen: (() => void) | null = null;
     let unlistenMenuNew: (() => void) | null = null;
