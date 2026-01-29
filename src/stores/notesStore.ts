@@ -161,12 +161,28 @@ function pushUndo(section: "pinned" | "notes", ids: string[]) {
   reorderRedoStack.length = 0;
 }
 
+function listIds(list: NotesList) {
+  return new Set([...list.active, ...list.trashed].map((note) => note.id));
+}
+
+function pruneByIds<T>(map: Record<string, T>, ids: Set<string>) {
+  const next: Record<string, T> = {};
+  for (const [key, value] of Object.entries(map)) {
+    if (ids.has(key)) next[key] = value;
+  }
+  return next;
+}
+
 export const useNotesStore = create<NotesState>((set, get) => ({
   ...DEFAULT_STATE,
   init: async () => {
     set({ loading: true });
 
-    await api.expiryRunNow();
+    try {
+      await api.expiryRunNow();
+    } catch (err) {
+      console.error("Expiry sweep failed during init:", err);
+    }
 
     const [list, appState] = await Promise.all([api.notesList(), api.appStateGetAll()]);
 
@@ -458,7 +474,34 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     }
   },
   runExpirySweep: async () => {
-    await api.expiryRunNow();
-    await get().refresh();
+    try {
+      await api.expiryRunNow();
+    } catch (err) {
+      console.error("Expiry sweep failed:", err);
+    }
+
+    const list = await api.notesList();
+    const trashedIds = new Set(list.trashed.map((note) => note.id));
+    const allowedIds = listIds(list);
+
+    set((s) => {
+      const nextContent = pruneByIds(s.contentById, allowedIds);
+      const nextDirty = Object.fromEntries(
+        Object.entries(s.dirtySavedById).filter(
+          ([id]) => allowedIds.has(id) && !trashedIds.has(id),
+        ),
+      );
+      const selectedId = s.selectedId && allowedIds.has(s.selectedId) ? s.selectedId : null;
+      const selectedIsTrashed = selectedId ? trashedIds.has(selectedId) : false;
+
+      return {
+        ...s,
+        list,
+        selectedId,
+        viewMode: selectedIsTrashed ? "trash" : s.viewMode,
+        contentById: nextContent,
+        dirtySavedById: nextDirty,
+      };
+    });
   },
 }));

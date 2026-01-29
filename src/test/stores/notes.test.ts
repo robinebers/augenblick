@@ -103,6 +103,26 @@ describe("notesStore", () => {
     expect(useNotesStore.getState().list.active.map((n) => n.id)).toEqual(["n1"]);
   });
 
+  it("cleans local state when expiry removes notes", async () => {
+    const n1 = meta({ id: "n1", storage: "saved", sortOrder: 1 });
+
+    apiMock.notesList
+      .mockResolvedValueOnce({ active: [n1], trashed: [] })
+      .mockResolvedValueOnce({ active: [], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    useNotesStore.getState().updateContent("n1", "changed");
+    expect(useNotesStore.getState().dirtySavedById).toEqual({ n1: true });
+
+    await useNotesStore.getState().runExpirySweep();
+
+    expect(useNotesStore.getState().contentById.n1).toBeUndefined();
+    expect(useNotesStore.getState().dirtySavedById).toEqual({});
+  });
+
   it("creates draft note, writes app state, and debounces draft autosave", async () => {
     const created = meta({ id: "d1", storage: "draft", sortOrder: 1 });
     const updated = meta({

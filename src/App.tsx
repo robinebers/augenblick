@@ -27,6 +27,7 @@ import { openDialog, confirmDialog } from "@/stores/dialogStore";
 import { useNotesStore } from "@/stores/notesStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { api } from "@/lib/api";
+import { noteExpiryTime } from "@/lib/utils/expiry";
 
 const LazyEditor = lazy(() =>
   import("@/features/editor/Editor").then((mod) => ({ default: mod.Editor })),
@@ -202,12 +203,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const expiryMs = Math.max(1, expiryMinutes) * 60_000;
     let nextExpiryAt: number | null = null;
 
     for (const note of list.active) {
       if (note.isPinned) continue;
-      const noteExpiry = note.lastInteraction + expiryMs;
+      const noteExpiry = noteExpiryTime(note.lastInteraction, expiryMinutes);
       if (nextExpiryAt === null || noteExpiry < nextExpiryAt) nextExpiryAt = noteExpiry;
     }
 
