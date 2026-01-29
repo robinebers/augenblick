@@ -107,7 +107,9 @@ function App() {
       const update = await check();
       if (!update) {
         if (!options.silent) {
-          toast.success("You're up to date.");
+          toast.success("You're up to date!", {
+            description: "You're running the latest version of Augenblick.",
+          });
         }
         return;
       }
@@ -115,8 +117,9 @@ function App() {
       // Download and install immediately (silently)
       await update.downloadAndInstall();
 
-      // Show simple toast with Restart button
-      toast.success("New version ready to install", {
+      // Show toast with Restart button
+      toast.success("Update available", {
+        description: `Version ${update.version} is here. Restart to install.`,
         action: {
           label: "Restart",
           onClick: () => {
