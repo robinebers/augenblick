@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { expiryProgress, expiryStatus } from "@/lib/utils/expiry";
+import { expiryProgress, expiryStatus, noteExpiryTime } from "@/lib/utils/expiry";
 import { formatRelativeTimeFromNow } from "@/lib/utils/time";
 
 type Props = {
@@ -31,7 +31,7 @@ export function ExpiryRing({ lastInteraction, expiryMinutes }: Props) {
           : "var(--ring-red)";
 
   const expiryAt = useMemo(
-    () => lastInteraction + Math.max(1, expiryMinutes) * 60_000,
+    () => noteExpiryTime(lastInteraction, expiryMinutes),
     [lastInteraction, expiryMinutes],
   );
   const tooltipText = `Trashed ${formatRelativeTimeFromNow(expiryAt, now)}`;

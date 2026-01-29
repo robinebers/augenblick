@@ -48,6 +48,7 @@ describe("notesStore", () => {
     Object.values(apiMock).forEach((fn) => fn.mockReset());
     apiMock.noteSetActive.mockResolvedValue(undefined);
     apiMock.appStateSet.mockResolvedValue(undefined);
+    apiMock.expiryRunNow.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -73,6 +74,10 @@ describe("notesStore", () => {
     expect(state.selectedId).toBe("n1");
     expect(state.contentById.n1).toBe("hello");
     expect(apiMock.noteSetActive).toHaveBeenCalledWith("n1");
+    expect(apiMock.expiryRunNow).toHaveBeenCalled();
+    expect(apiMock.expiryRunNow.mock.invocationCallOrder[0]).toBeLessThan(
+      apiMock.notesList.mock.invocationCallOrder[0],
+    );
   });
 
   it("clears selectedId when missing from list", async () => {
@@ -83,6 +88,87 @@ describe("notesStore", () => {
     await useNotesStore.getState().init();
 
     expect(useNotesStore.getState().selectedId).toBeNull();
+  });
+
+  it("runs expiry sweep and refreshes list", async () => {
+    const n1 = meta({ id: "n1", storage: "draft", sortOrder: 1 });
+
+    apiMock.notesList.mockResolvedValue({ active: [n1], trashed: [] });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().runExpirySweep();
+
+    expect(apiMock.expiryRunNow).toHaveBeenCalledTimes(1);
+    expect(apiMock.notesList).toHaveBeenCalledTimes(1);
+    expect(useNotesStore.getState().list.active.map((n) => n.id)).toEqual(["n1"]);
+  });
+
+  it("cleans local state when expiry removes notes", async () => {
+    const n1 = meta({ id: "n1", storage: "saved", sortOrder: 1 });
+
+    apiMock.notesList
+      .mockResolvedValueOnce({ active: [n1], trashed: [] })
+      .mockResolvedValueOnce({ active: [], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    useNotesStore.getState().updateContent("n1", "changed");
+    expect(useNotesStore.getState().dirtySavedById).toEqual({ n1: true });
+
+    await useNotesStore.getState().runExpirySweep();
+
+    expect(useNotesStore.getState().contentById.n1).toBeUndefined();
+    expect(useNotesStore.getState().dirtySavedById).toEqual({});
+  });
+
+  it("keeps dirty flags when notes expire into trash", async () => {
+    const n1 = meta({ id: "n1", storage: "saved", sortOrder: 1 });
+    const trashed = meta({ id: "n1", storage: "saved", isTrashed: true, trashedAt: 2 });
+
+    apiMock.notesList.mockResolvedValue({ active: [], trashed: [trashed] });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    useNotesStore.setState((s: any) => ({
+      ...s,
+      list: { active: [n1], trashed: [] },
+      contentById: { n1: "draft" },
+      dirtySavedById: { n1: true },
+    }));
+
+    await useNotesStore.getState().runExpirySweep();
+
+    expect(useNotesStore.getState().dirtySavedById).toEqual({ n1: true });
+  });
+
+  it("keeps locally created notes when expiry list is stale", async () => {
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+
+    let resolveList: ((value: { active: NoteMeta[]; trashed: NoteMeta[] }) => void) | null =
+      null;
+    apiMock.notesList.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveList = resolve;
+        }),
+    );
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    const sweep = useNotesStore.getState().runExpirySweep();
+
+    vi.setSystemTime(new Date("2026-01-01T00:00:01Z"));
+    const created = meta({ id: "late", storage: "draft", sortOrder: 1, createdAt: Date.now() });
+    useNotesStore.setState((s: any) => ({
+      ...s,
+      list: { active: [created], trashed: [] },
+      contentById: { late: "" },
+    }));
+
+    resolveList?.({ active: [], trashed: [] });
+    await sweep;
+
+    expect(useNotesStore.getState().list.active.map((n) => n.id)).toEqual(["late"]);
   });
 
   it("creates draft note, writes app state, and debounces draft autosave", async () => {

@@ -10,6 +10,10 @@ export function expiryProgress(
   return clamp01(1 - elapsed / totalMs);
 }
 
+export function noteExpiryTime(lastInteractionMs: number, expiryMinutes: number): number {
+  return lastInteractionMs + Math.max(1, expiryMinutes) * 60_000;
+}
+
 export function expiryStatus(progress: number): ExpiryStatus {
   const pct = clamp01(progress) * 100;
   if (pct >= 50) return "fresh";

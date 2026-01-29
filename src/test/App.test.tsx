@@ -82,6 +82,7 @@ const notesState = {
   undoReorder: vi.fn(async () => {}),
   redoReorder: vi.fn(async () => {}),
   heartbeatSelected: vi.fn(async () => {}),
+  runExpirySweep: vi.fn(async () => {}),
 };
 
 const useNotesStore = ((selector: any) => selector(notesState)) as any;

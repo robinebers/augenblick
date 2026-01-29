@@ -27,6 +27,7 @@ import { openDialog, confirmDialog } from "@/stores/dialogStore";
 import { useNotesStore } from "@/stores/notesStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { api } from "@/lib/api";
+import { noteExpiryTime } from "@/lib/utils/expiry";
 
 const LazyEditor = lazy(() =>
   import("@/features/editor/Editor").then((mod) => ({ default: mod.Editor })),
@@ -200,6 +201,25 @@ function App() {
     if (choice === "save") await useNotesStore.getState().saveAllDirty();
     return true;
   }, []);
+
+  useEffect(() => {
+    let nextExpiryAt: number | null = null;
+
+    for (const note of list.active) {
+      if (note.isPinned) continue;
+      const noteExpiry = noteExpiryTime(note.lastInteraction, expiryMinutes);
+      if (nextExpiryAt === null || noteExpiry < nextExpiryAt) nextExpiryAt = noteExpiry;
+    }
+
+    if (nextExpiryAt === null) return;
+
+    const delay = Math.max(0, nextExpiryAt - Date.now());
+    const timer = window.setTimeout(() => {
+      void runOrAlert(() => useNotesStore.getState().runExpirySweep());
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [expiryMinutes, list.active, runOrAlert]);
 
   useEffect(() => {
     let isClosing = false;
