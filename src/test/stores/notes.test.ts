@@ -123,6 +123,54 @@ describe("notesStore", () => {
     expect(useNotesStore.getState().dirtySavedById).toEqual({});
   });
 
+  it("keeps dirty flags when notes expire into trash", async () => {
+    const n1 = meta({ id: "n1", storage: "saved", sortOrder: 1 });
+    const trashed = meta({ id: "n1", storage: "saved", isTrashed: true, trashedAt: 2 });
+
+    apiMock.notesList.mockResolvedValue({ active: [], trashed: [trashed] });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    useNotesStore.setState((s: any) => ({
+      ...s,
+      list: { active: [n1], trashed: [] },
+      contentById: { n1: "draft" },
+      dirtySavedById: { n1: true },
+    }));
+
+    await useNotesStore.getState().runExpirySweep();
+
+    expect(useNotesStore.getState().dirtySavedById).toEqual({ n1: true });
+  });
+
+  it("keeps locally created notes when expiry list is stale", async () => {
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+
+    let resolveList: ((value: { active: NoteMeta[]; trashed: NoteMeta[] }) => void) | null =
+      null;
+    apiMock.notesList.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveList = resolve;
+        }),
+    );
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    const sweep = useNotesStore.getState().runExpirySweep();
+
+    vi.setSystemTime(new Date("2026-01-01T00:00:01Z"));
+    const created = meta({ id: "late", storage: "draft", sortOrder: 1, createdAt: Date.now() });
+    useNotesStore.setState((s: any) => ({
+      ...s,
+      list: { active: [created], trashed: [] },
+      contentById: { late: "" },
+    }));
+
+    resolveList?.({ active: [], trashed: [] });
+    await sweep;
+
+    expect(useNotesStore.getState().list.active.map((n) => n.id)).toEqual(["late"]);
+  });
+
   it("creates draft note, writes app state, and debounces draft autosave", async () => {
     const created = meta({ id: "d1", storage: "draft", sortOrder: 1 });
     const updated = meta({

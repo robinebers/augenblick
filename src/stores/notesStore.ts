@@ -173,6 +173,22 @@ function pruneByIds<T>(map: Record<string, T>, ids: Set<string>) {
   return next;
 }
 
+function sortActive(notes: NoteMeta[]) {
+  return [...notes].sort((a, b) => {
+    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+    return a.sortOrder - b.sortOrder;
+  });
+}
+
+function sortTrashed(notes: NoteMeta[]) {
+  return [...notes].sort((a, b) => {
+    const aTrashed = a.trashedAt ?? 0;
+    const bTrashed = b.trashedAt ?? 0;
+    if (aTrashed !== bTrashed) return bTrashed - aTrashed;
+    return a.sortOrder - b.sortOrder;
+  });
+}
+
 export const useNotesStore = create<NotesState>((set, get) => ({
   ...DEFAULT_STATE,
   init: async () => {
@@ -474,22 +490,37 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     }
   },
   runExpirySweep: async () => {
+    const sweepStartedAt = Date.now();
+
     try {
       await api.expiryRunNow();
     } catch (err) {
       console.error("Expiry sweep failed:", err);
     }
 
-    const list = await api.notesList();
+    const fetched = await api.notesList();
+    const current = get();
+    const fetchedIds = listIds(fetched);
+    const extraActive = current.list.active.filter(
+      (note) => !fetchedIds.has(note.id) && note.createdAt >= sweepStartedAt,
+    );
+    const extraTrashed = current.list.trashed.filter(
+      (note) => !fetchedIds.has(note.id) && note.createdAt >= sweepStartedAt,
+    );
+    const list =
+      extraActive.length || extraTrashed.length
+        ? {
+            active: sortActive([...fetched.active, ...extraActive]),
+            trashed: sortTrashed([...fetched.trashed, ...extraTrashed]),
+          }
+        : fetched;
     const trashedIds = new Set(list.trashed.map((note) => note.id));
     const allowedIds = listIds(list);
 
     set((s) => {
       const nextContent = pruneByIds(s.contentById, allowedIds);
       const nextDirty = Object.fromEntries(
-        Object.entries(s.dirtySavedById).filter(
-          ([id]) => allowedIds.has(id) && !trashedIds.has(id),
-        ),
+        Object.entries(s.dirtySavedById).filter(([id]) => allowedIds.has(id)),
       );
       const selectedId = s.selectedId && allowedIds.has(s.selectedId) ? s.selectedId : null;
       const selectedIsTrashed = selectedId ? trashedIds.has(selectedId) : false;
