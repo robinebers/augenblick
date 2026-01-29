@@ -77,7 +77,11 @@ fn truncate(s: String, max_len: usize) -> String {
         return s;
     }
     let mut out = s;
-    out.truncate(max_len);
+    let mut end = max_len.min(out.len());
+    while end > 0 && !out.is_char_boundary(end) {
+        end -= 1;
+    }
+    out.truncate(end);
     out
 }
 
@@ -134,5 +138,16 @@ mod tests {
     fn escaped_heading_prefix() {
         let (title, _) = derive_title_preview("\\# Escaped");
         assert!(title.starts_with('#'));
+    }
+
+    #[test]
+    fn unicode_truncation_no_panic() {
+        let line = "● Jamf “KISS” Setup (mit eurem check_free_space + Live-Check + Zeilenumbrüche)"
+            .repeat(4);
+        let (title, preview) = derive_title_preview(&line);
+        assert!(!title.is_empty());
+        assert!(!preview.is_empty());
+        assert!(title.len() <= 80);
+        assert!(preview.len() <= 140);
     }
 }
