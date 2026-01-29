@@ -286,6 +286,14 @@ function App() {
       }));
 
       if (disposed) return;
+      registerUnlisten(await listen("tray-show-all", () => {
+        void runOrAlert(async () => {
+          useNotesStore.getState().setViewMode("notes");
+          await showMainWindow();
+        });
+      }));
+
+      if (disposed) return;
       registerUnlisten(await listen<string>("tray-select-note", (event) => {
         const id = event.payload;
         if (!id) return;
