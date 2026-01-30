@@ -28,8 +28,11 @@ describe("NoteItem", () => {
       React.createElement((await import("@/features/sidebar/NoteItem")).NoteItem, {
         note: base,
         selected: false,
+        dirty: false,
         expiryMinutes: 60,
         onSelect,
+        onTogglePin: vi.fn(),
+        onTrash: vi.fn(),
       }),
     );
 
@@ -46,8 +49,11 @@ describe("NoteItem", () => {
       React.createElement((await import("@/features/sidebar/NoteItem")).NoteItem, {
         note: { ...base, isPinned: true },
         selected: false,
+        dirty: false,
         expiryMinutes: 60,
         onSelect,
+        onTogglePin: vi.fn(),
+        onTrash: vi.fn(),
       }),
     );
 

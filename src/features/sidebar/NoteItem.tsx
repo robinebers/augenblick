@@ -13,13 +13,14 @@ import {
 type Props = {
   note: NoteMeta;
   selected: boolean;
+  dirty: boolean;
   expiryMinutes: number;
   onSelect: (id: string) => void;
   onTogglePin: (id: string) => void;
   onTrash: (id: string) => void;
 };
 
-export function NoteItem({ note, selected, expiryMinutes, onSelect, onTogglePin, onTrash }: Props) {
+export function NoteItem({ note, selected, dirty, expiryMinutes, onSelect, onTogglePin, onTrash }: Props) {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -32,8 +33,14 @@ export function NoteItem({ note, selected, expiryMinutes, onSelect, onTogglePin,
         >
           <div className="min-w-0 flex-1">
             <div className="truncate font-semibold">{note.title}</div>
-            <div className="truncate text-[11px] text-muted-foreground">
-              {formatRelativeTime(note.lastInteraction)}
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="truncate">{formatRelativeTime(note.lastInteraction)}</span>
+              {dirty ? (
+                <span
+                  className="shrink-0 rounded-full"
+                  style={{ width: 5, height: 5, background: "var(--foreground)" }}
+                />
+              ) : null}
             </div>
           </div>
 
