@@ -9,7 +9,7 @@ mod types;
 mod window_state;
 
 use app_state::AppState;
-use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 use window_state::show_main_window;
@@ -33,6 +33,7 @@ pub fn run() {
             app.manage(state.clone());
             expiry::start_background_sweeper(state);
             let _ = window_state::restore_and_clamp(&app_handle);
+            show_main_window(&app_handle);
 
             let quit_item = PredefinedMenuItem::quit(app, Some("Quit Augenblick"))
                 .map_err(|err| std::io::Error::other(err.to_string()))?;
@@ -40,8 +41,12 @@ pub fn run() {
                 .accelerator("CmdOrCtrl+Comma")
                 .build(app)
                 .map_err(|err| std::io::Error::other(err.to_string()))?;
+            let about_metadata = AboutMetadata {
+                credits: Some("Built by Robin Ebers (@robinebers)".into()),
+                ..Default::default()
+            };
             let app_menu = SubmenuBuilder::new(app, "Augenblick")
-                .about_with_text("About Augenblick", None)
+                .about_with_text("About Augenblick", Some(about_metadata))
                 .separator()
                 .item(&settings_item)
                 .separator()

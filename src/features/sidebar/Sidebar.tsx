@@ -285,20 +285,20 @@ export function Sidebar({
           <>
             <button
               type="button"
-              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-[13px] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+              className="group flex h-9 w-full items-center gap-2 rounded-md px-2 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               onClick={onNewNote}
             >
-              <Icon name="file-text" className="text-[var(--text-secondary)]" />
+              <Icon name="file-text" className="group-hover:text-[var(--text-primary)]" />
               New note
             </button>
 
             <button
               type="button"
-              className="flex h-9 w-full items-center justify-between rounded-md px-2 text-[13px] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+              className="group flex h-9 w-full items-center justify-between rounded-md px-2 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               onClick={onToggleTrash}
             >
               <span className="flex items-center gap-2">
-                <Icon name="trash" className="text-[var(--text-secondary)]" />
+                <Icon name="trash" className="group-hover:text-[var(--text-primary)]" />
                 Trash
               </span>
               {trashed.length > 0 ? (
@@ -310,21 +310,21 @@ export function Sidebar({
           <>
             <button
               type="button"
-              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-[13px] text-[var(--ring-red)] hover:bg-[var(--bg-tertiary)] disabled:opacity-50"
+              className="group flex h-9 w-full items-center gap-2 rounded-md px-2 text-[13px] text-[var(--ring-red)]/70 hover:text-[var(--ring-red)] disabled:opacity-50"
               onClick={onClearTrash}
               disabled={trashed.length === 0}
             >
-              <Icon name="trash" className="text-[var(--ring-red)]" />
-              Empty Trash
+              <Icon name="trash" className="text-[var(--ring-red)]/70 group-hover:text-[var(--ring-red)]" />
+              Empty trash
             </button>
 
             <button
               type="button"
-              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-[13px] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+              className="group flex h-9 w-full items-center gap-2 rounded-md px-2 text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               onClick={onToggleTrash}
             >
-              <Icon name="undo" className="text-[var(--text-secondary)]" />
-              Back to Notes
+              <Icon name="undo" className="group-hover:text-[var(--text-primary)]" />
+              Back to notes
             </button>
           </>
         )}
