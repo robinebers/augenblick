@@ -26,6 +26,7 @@ type Props = {
   notes: NoteMeta[];
   trashed: NoteMeta[];
   selectedId: string | null;
+  dirtyIds: Record<string, true>;
   expiryMinutes: number;
   trashRetentionDays: number;
   viewMode: "notes" | "trash";
@@ -43,13 +44,14 @@ type Props = {
 type SortableRowProps = {
   note: NoteMeta;
   selected: boolean;
+  dirty: boolean;
   expiryMinutes: number;
   onSelect: (id: string) => void;
   onTogglePin: (id: string) => void;
   onTrash: (id: string) => void;
 };
 
-function SortableRow({ note, selected, expiryMinutes, onSelect, onTogglePin, onTrash }: SortableRowProps) {
+function SortableRow({ note, selected, dirty, expiryMinutes, onSelect, onTogglePin, onTrash }: SortableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: note.id,
   });
@@ -65,6 +67,7 @@ function SortableRow({ note, selected, expiryMinutes, onSelect, onTogglePin, onT
       <NoteItem
         note={note}
         selected={selected}
+        dirty={dirty}
         expiryMinutes={expiryMinutes}
         onSelect={onSelect}
         onTogglePin={onTogglePin}
@@ -133,6 +136,7 @@ export function Sidebar({
   notes,
   trashed,
   selectedId,
+  dirtyIds,
   expiryMinutes,
   trashRetentionDays,
   viewMode,
@@ -191,6 +195,7 @@ export function Sidebar({
                           <SortableRow
                             note={note}
                             selected={note.id === selectedId}
+                            dirty={!!dirtyIds[note.id]}
                             expiryMinutes={expiryMinutes}
                             onSelect={onSelect}
                             onTogglePin={onTogglePin}
@@ -236,6 +241,7 @@ export function Sidebar({
                       <SortableRow
                         note={note}
                         selected={note.id === selectedId}
+                        dirty={!!dirtyIds[note.id]}
                         expiryMinutes={expiryMinutes}
                         onSelect={onSelect}
                         onTogglePin={onTogglePin}

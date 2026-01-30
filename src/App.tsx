@@ -49,6 +49,7 @@ function App() {
   const viewMode = useNotesStore((s) => s.viewMode);
   const sidebarWidth = useNotesStore((s) => s.sidebarWidth);
   const contentById = useNotesStore((s) => s.contentById);
+  const dirtySavedById = useNotesStore((s) => s.dirtySavedById);
 
   const expiryMinutes = useSettingsStore((s) => s.expiryMinutes);
   const trashRetentionDays = useSettingsStore((s) => s.trashRetentionDays);
@@ -434,6 +435,7 @@ function App() {
               notes={notes}
               trashed={trashed}
               selectedId={selectedId}
+              dirtyIds={dirtySavedById}
               expiryMinutes={expiryMinutes}
               trashRetentionDays={trashRetentionDays}
               viewMode={viewMode}
