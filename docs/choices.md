@@ -31,3 +31,6 @@
 ## 2026-01-29
 - Expiry sync: run `expiry_run_now` before initial notes load; schedule next sweep at nearest unpinned note expiry to keep UI list in sync.
 - Tray click: treat any left-click on tray icon as "show all notes" (Cmd modifier not exposed by Tauri tray events).
+
+## 2026-01-30
+- macOS app visibility: switch activation policy to `Regular` while the main window is shown (menu + Dock), back to `Accessory` when hidden (tray-only idle).

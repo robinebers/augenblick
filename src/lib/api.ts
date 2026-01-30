@@ -22,5 +22,7 @@ export const api = {
   appStateGetAll: () => invoke<Record<string, string>>("app_state_get_all"),
   appStateSet: (key: string, value: string) => invoke<void>("app_state_set", { key, value }),
   expiryRunNow: () => invoke<void>("expiry_run_now"),
+  appSetActivationPolicy: (policy: "regular" | "accessory" | "prohibited") =>
+    invoke<void>("app_set_activation_policy", { policy }),
   appExit: () => invoke<void>("app_exit"),
 };

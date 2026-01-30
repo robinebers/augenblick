@@ -89,11 +89,23 @@ function App() {
     }
   }, []);
 
+  const syncMacActivationPolicy = useCallback(async (visible?: boolean) => {
+    try {
+      const window = getCurrentWindow();
+      const shouldShow = visible ?? (await window.isVisible());
+      await api.appSetActivationPolicy(shouldShow ? "regular" : "accessory");
+    } catch (err) {
+      console.error("activation policy sync failed", err);
+      toast.error("Activation policy failed", { description: String(err) });
+    }
+  }, []);
+
   const showMainWindow = useCallback(async () => {
+    await syncMacActivationPolicy(true);
     const window = getCurrentWindow();
     await window.show();
     await window.setFocus();
-  }, []);
+  }, [syncMacActivationPolicy]);
 
   const hasCheckedOnLaunchRef = useRef(false);
 
@@ -238,6 +250,8 @@ function App() {
     };
 
     void runOrAlert(async () => {
+      await syncMacActivationPolicy();
+      if (disposed) return;
       await useSettingsStore.getState().init();
       if (disposed) return;
       await useNotesStore.getState().init();
@@ -322,6 +336,7 @@ function App() {
           const shouldHide = await confirmUnsaved("Hide Augenblick?");
           if (!shouldHide) return;
           await getCurrentWindow().hide();
+          await runOrAlert(() => syncMacActivationPolicy(false));
         } finally {
           isClosing = false;
         }
@@ -395,7 +410,14 @@ function App() {
         unlisten();
       }
     };
-  }, [actions, checkForUpdates, confirmUnsaved, runOrAlert, showMainWindow]);
+  }, [
+    actions,
+    checkForUpdates,
+    confirmUnsaved,
+    runOrAlert,
+    showMainWindow,
+    syncMacActivationPolicy,
+  ]);
 
   return (
     <ErrorBoundary>
