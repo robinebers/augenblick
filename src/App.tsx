@@ -420,7 +420,7 @@ function App() {
               onRestore={(id) => void runOrAlert(() => useNotesStore.getState().restore(id))}
               onDeleteForever={(id) => void runOrAlert(() => actions.deleteForeverFromTrash(id))}
               onTogglePin={(id) => void runOrAlert(() => useNotesStore.getState().togglePin(id))}
-              onTrash={(id) => void runOrAlert(() => useNotesStore.getState().trash(id))}
+              onTrash={(id) => void runOrAlert(() => (id === selectedId ? actions.closeCurrent() : useNotesStore.getState().trash(id)))}
               onNewNote={() => void runOrAlert(() => useNotesStore.getState().createNote())}
             />
           </div>
