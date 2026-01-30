@@ -223,6 +223,103 @@ describe("Editor", () => {
     await unmount();
   });
 
+  it("shows bubble menu when text is selected", async () => {
+    const onChange = vi.fn();
+
+    const { unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "hello",
+        onChange,
+      }),
+    );
+
+    const shouldShow = bubbleProps?.shouldShow;
+    expect(
+      shouldShow({
+        state: {
+          selection: { empty: false, from: 0, to: 5 },
+          doc: { textContent: "hello", textBetween: () => "hello" },
+          schema: { marks: { link: { name: "link" } } },
+        },
+      }),
+    ).toBe(true);
+
+    await unmount();
+  });
+
+  it("hides bubble menu when selection is whitespace only", async () => {
+    const onChange = vi.fn();
+
+    const { unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "hello",
+        onChange,
+      }),
+    );
+
+    const shouldShow = bubbleProps?.shouldShow;
+    expect(
+      shouldShow({
+        state: {
+          selection: { empty: false, from: 0, to: 3 },
+          doc: { textContent: "   world", textBetween: () => "   " },
+          schema: { marks: { link: { name: "link" } } },
+        },
+      }),
+    ).toBe(false);
+
+    await unmount();
+  });
+
+  it("shows bubble menu when cursor is on link mark", async () => {
+    const onChange = vi.fn();
+
+    const { unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "hello",
+        onChange,
+      }),
+    );
+
+    const shouldShow = bubbleProps?.shouldShow;
+    const linkMark = { name: "link" };
+    expect(
+      shouldShow({
+        state: {
+          selection: { empty: true, from: 2, to: 2, $from: { marks: () => [{ type: linkMark }] } },
+          doc: { textContent: "hello", textBetween: () => "" },
+          schema: { marks: { link: linkMark } },
+        },
+      }),
+    ).toBe(true);
+
+    await unmount();
+  });
+
+  it("hides bubble menu when no link mark in schema", async () => {
+    const onChange = vi.fn();
+
+    const { unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "hello",
+        onChange,
+      }),
+    );
+
+    const shouldShow = bubbleProps?.shouldShow;
+    expect(
+      shouldShow({
+        state: {
+          selection: { empty: true, from: 2, to: 2, $from: { marks: () => [] } },
+          doc: { textContent: "hello", textBetween: () => "" },
+          schema: { marks: {} },
+        },
+      }),
+    ).toBe(false);
+
+    await unmount();
+  });
+
   it("opens links only on modifier click", async () => {
     const onChange = vi.fn();
     const openSpy = vi.spyOn(window, "open").mockReturnValue(null);

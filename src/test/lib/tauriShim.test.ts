@@ -258,4 +258,9 @@ describe("tauri web shim", () => {
     const settings = (await invoke("settings_get_all")) as { theme: string };
     expect(settings.theme).toBe("dark");
   });
+
+  it("silently returns for note_set_active on missing note", async () => {
+    const result = await invoke("note_set_active", { id: "nonexistent" });
+    expect(result).toBeUndefined();
+  });
 });

@@ -156,6 +156,7 @@ describe("notesStore", () => {
 
     const { useNotesStore } = await import("@/stores/notesStore");
     const sweep = useNotesStore.getState().runExpirySweep();
+    await vi.advanceTimersByTimeAsync(0); // flush to allow expiryRunNow to resolve and notesList to be called
 
     vi.setSystemTime(new Date("2026-01-01T00:00:01Z"));
     const created = meta({ id: "late", storage: "draft", sortOrder: 1, createdAt: Date.now() });
@@ -166,6 +167,7 @@ describe("notesStore", () => {
     }));
 
     resolveList?.({ active: [], trashed: [] });
+    await vi.advanceTimersByTimeAsync(0);
     await sweep;
 
     expect(useNotesStore.getState().list.active.map((n) => n.id)).toEqual(["late"]);
@@ -460,6 +462,35 @@ describe("notesStore", () => {
 
     await useNotesStore.getState().heartbeatSelected();
     expect(spy).toHaveBeenCalledWith("Heartbeat failed:", expect.any(Error));
+    spy.mockRestore();
+  });
+
+  it("logs error when draft auto-save fails", async () => {
+    const draft = meta({ id: "d1", storage: "draft" });
+    apiMock.notesList.mockResolvedValue({ active: [draft], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+    apiMock.noteWriteDraft.mockRejectedValue(new Error("write failed"));
+
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    useNotesStore.getState().updateContent("d1", "new content");
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(spy).toHaveBeenCalledWith("Draft auto-save failed for d1:", expect.any(Error));
+    spy.mockRestore();
+  });
+
+  it("logs error when expiryRunNow fails during sweep", async () => {
+    apiMock.expiryRunNow.mockRejectedValue(new Error("expiry failed"));
+    apiMock.notesList.mockResolvedValue({ active: [], trashed: [] });
+
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().runExpirySweep();
+
+    expect(spy).toHaveBeenCalledWith("Expiry sweep failed:", expect.any(Error));
     spy.mockRestore();
   });
 });
