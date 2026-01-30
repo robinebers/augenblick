@@ -100,13 +100,6 @@ function App() {
     }
   }, []);
 
-  const showMainWindow = useCallback(async () => {
-    await syncMacActivationPolicy(true);
-    const window = getCurrentWindow();
-    await window.show();
-    await window.setFocus();
-  }, [syncMacActivationPolicy]);
-
   const hasCheckedOnLaunchRef = useRef(false);
 
   const checkForUpdates = useCallback(async (options: { silent?: boolean } = {}) => {
@@ -295,36 +288,27 @@ function App() {
         setShowSettings(true);
       }));
 
+      // Tray event handlers - window is already shown by Rust before these events are emitted
       if (disposed) return;
       registerUnlisten(await listen("tray-new-note", () => {
-        void runOrAlert(async () => {
-          await useNotesStore.getState().createNote();
-          await showMainWindow();
-        });
+        void runOrAlert(() => useNotesStore.getState().createNote());
       }));
 
       if (disposed) return;
       registerUnlisten(await listen("tray-show-all", () => {
-        void runOrAlert(async () => {
-          useNotesStore.getState().setViewMode("notes");
-          await showMainWindow();
-        });
+        useNotesStore.getState().setViewMode("notes");
       }));
 
       if (disposed) return;
       registerUnlisten(await listen<string>("tray-select-note", (event) => {
         const id = event.payload;
         if (!id) return;
-        void runOrAlert(async () => {
-          await useNotesStore.getState().select(id);
-          await showMainWindow();
-        });
+        void runOrAlert(() => useNotesStore.getState().select(id));
       }));
 
       if (disposed) return;
       registerUnlisten(await listen("tray-quit", () => {
         void runOrAlert(async () => {
-          await showMainWindow();
           const shouldQuit = await confirmUnsaved("Quit Augenblick?");
           if (!shouldQuit) return;
           await api.appExit();
@@ -419,7 +403,6 @@ function App() {
     checkForUpdates,
     confirmUnsaved,
     runOrAlert,
-    showMainWindow,
     syncMacActivationPolicy,
   ]);
 

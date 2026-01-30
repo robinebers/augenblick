@@ -15,6 +15,42 @@ use tauri::{AppHandle, Emitter, Manager};
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
 
+/// Show the main window and bring the app to front on macOS.
+/// This handles activation policy, NSApplication activation, and window focus
+/// all in Rust to avoid race conditions with async JS event handlers.
+#[cfg(target_os = "macos")]
+fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+
+    // 1. Set activation policy to Regular (shows dock icon, allows activation)
+    let _ = app_handle.set_activation_policy(ActivationPolicy::Regular);
+
+    // 2. Activate the app using NSApplication.activate()
+    // This is critical - without it, the window may not come to front
+    if let Some(mtm) = MainThreadMarker::new() {
+        let ns_app = NSApplication::sharedApplication(mtm);
+        unsafe {
+            ns_app.activate();
+        }
+    }
+
+    // 3. Show and focus the window
+    if let Some(window) = app_handle.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// Non-macOS fallback - just show and focus the window
+#[cfg(not(target_os = "macos"))]
+fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -128,21 +164,25 @@ pub fn run() {
             app.on_menu_event(|app_handle, event| {
                 let id = event.id().0.as_str();
                 if id == "tray_new_note" {
+                    show_main_window(app_handle);
                     let _ = app_handle.emit("tray-new-note", ());
                     return;
                 }
 
                 if id == "tray_quit" {
+                    show_main_window(app_handle);
                     let _ = app_handle.emit("tray-quit", ());
                     return;
                 }
 
                 if id == "tray_show_all" {
+                    show_main_window(app_handle);
                     let _ = app_handle.emit("tray-show-all", ());
                     return;
                 }
 
                 if let Some(note_id) = id.strip_prefix(TRAY_NOTE_PREFIX) {
+                    show_main_window(app_handle);
                     let _ = app_handle.emit("tray-select-note", note_id.to_string());
                     return;
                 }
@@ -209,6 +249,8 @@ pub fn run() {
                         ..
                     } = event
                     {
+                        // Show window directly in Rust to avoid race conditions with async JS
+                        show_main_window(tray.app_handle());
                         let _ = tray.app_handle().emit("tray-show-all", ());
                     }
                 })
