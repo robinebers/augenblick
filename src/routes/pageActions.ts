@@ -35,6 +35,7 @@ export function createPageActions(deps: {
   saveFile: SaveFile;
   getSelectedId: () => string | null;
   getSelectedMeta: () => NoteMeta | null;
+  getMetaById?: (id: string) => NoteMeta | null;
   isDirtySaved: (id: string) => boolean;
   getSidebarWidth: () => number;
   setSidebarWidth: (width: number) => void;
@@ -87,10 +88,14 @@ export function createPageActions(deps: {
     await deps.notesStore.saveAs(id, finalPath);
   }
 
-  async function closeCurrent() {
-    const id = deps.getSelectedId();
-    const meta = deps.getSelectedMeta();
-    if (!id || !meta) return;
+  function resolveMetaById(id: string) {
+    if (deps.getMetaById) return deps.getMetaById(id);
+    return deps.getSelectedId() === id ? deps.getSelectedMeta() : null;
+  }
+
+  async function trashNoteById(id: string) {
+    const meta = resolveMetaById(id);
+    if (!meta || meta.isTrashed) return;
 
     if (meta.storage === "saved" && deps.isDirtySaved(id)) {
       const choice = await deps.dialog.openDialog({
@@ -113,6 +118,12 @@ export function createPageActions(deps: {
 
     await deps.notesStore.trash(id);
     deps.toast.success("Moved to Trash");
+  }
+
+  async function closeCurrent() {
+    const id = deps.getSelectedId();
+    if (!id) return;
+    await trashNoteById(id);
   }
 
   function onEditorChange(markdown: string) {
@@ -174,6 +185,7 @@ export function createPageActions(deps: {
     saveCurrent,
     saveAs,
     closeCurrent,
+    trashNoteById,
     onEditorChange,
     startResize,
     deleteForeverFromTrash,

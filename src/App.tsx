@@ -130,8 +130,8 @@ function App() {
       await update.downloadAndInstall();
 
       // Show toast with Restart button
-      toast.success("Update available", {
-        description: `Version ${update.version} is here. Restart to install.`,
+      toast.success("New update available", {
+        description: "Restart to use the latest",
         action: {
           label: "Restart",
           onClick: () => {
@@ -189,6 +189,10 @@ function App() {
           s.list.trashed.find((n) => n.id === id) ??
           null
         );
+      },
+      getMetaById: (id) => {
+        const s = useNotesStore.getState();
+        return s.list.active.find((n) => n.id === id) ?? s.list.trashed.find((n) => n.id === id) ?? null;
       },
       isDirtySaved: (id) => Boolean(useNotesStore.getState().dirtySavedById[id]),
       getSidebarWidth: () => useNotesStore.getState().sidebarWidth,
@@ -441,6 +445,8 @@ function App() {
               onClearTrash={() => void runOrAlert(() => actions.clearTrash())}
               onRestore={(id) => void runOrAlert(() => useNotesStore.getState().restore(id))}
               onDeleteForever={(id) => void runOrAlert(() => actions.deleteForeverFromTrash(id))}
+              onTogglePin={(id) => void runOrAlert(() => useNotesStore.getState().togglePin(id))}
+              onTrash={(id) => void runOrAlert(() => actions.trashNoteById(id))}
               onNewNote={() => void runOrAlert(() => useNotesStore.getState().createNote())}
             />
           </div>

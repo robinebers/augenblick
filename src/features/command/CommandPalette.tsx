@@ -121,7 +121,7 @@ export function CommandPalette({
         id: "trash",
         label: "Trash",
         icon: "trash",
-        shortcut: "⌘W",
+        shortcut: "Delete",
         keywords: ["trash", "close"],
         onSelect: () => {
           onCloseNote();

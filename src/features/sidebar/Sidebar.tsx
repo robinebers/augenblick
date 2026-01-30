@@ -35,6 +35,8 @@ type Props = {
   onClearTrash: () => void;
   onRestore: (id: string) => void;
   onDeleteForever: (id: string) => void;
+  onTogglePin: (id: string) => void;
+  onTrash: (id: string) => void;
   onNewNote: () => void;
 };
 
@@ -43,9 +45,11 @@ type SortableRowProps = {
   selected: boolean;
   expiryMinutes: number;
   onSelect: (id: string) => void;
+  onTogglePin: (id: string) => void;
+  onTrash: (id: string) => void;
 };
 
-function SortableRow({ note, selected, expiryMinutes, onSelect }: SortableRowProps) {
+function SortableRow({ note, selected, expiryMinutes, onSelect, onTogglePin, onTrash }: SortableRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: note.id,
   });
@@ -58,11 +62,13 @@ function SortableRow({ note, selected, expiryMinutes, onSelect }: SortableRowPro
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <NoteItem 
-        note={note} 
-        selected={selected} 
-        expiryMinutes={expiryMinutes} 
+      <NoteItem
+        note={note}
+        selected={selected}
+        expiryMinutes={expiryMinutes}
         onSelect={onSelect}
+        onTogglePin={onTogglePin}
+        onTrash={onTrash}
       />
     </div>
   );
@@ -136,6 +142,8 @@ export function Sidebar({
   onClearTrash,
   onRestore,
   onDeleteForever,
+  onTogglePin,
+  onTrash,
   onNewNote,
 }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -185,6 +193,8 @@ export function Sidebar({
                             selected={note.id === selectedId}
                             expiryMinutes={expiryMinutes}
                             onSelect={onSelect}
+                            onTogglePin={onTogglePin}
+                            onTrash={onTrash}
                           />
                         </div>
                       ))}
@@ -228,6 +238,8 @@ export function Sidebar({
                         selected={note.id === selectedId}
                         expiryMinutes={expiryMinutes}
                         onSelect={onSelect}
+                        onTogglePin={onTogglePin}
+                        onTrash={onTrash}
                       />
                     </div>
                   ))}
