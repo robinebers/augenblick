@@ -10,11 +10,27 @@ type Props = {
 
 export function ExpiryRing({ lastInteraction, expiryMinutes }: Props) {
   const [now, setNow] = useState(() => Date.now());
+  const expiryAt = useMemo(
+    () => noteExpiryTime(lastInteraction, expiryMinutes),
+    [lastInteraction, expiryMinutes],
+  );
 
+  // Adaptive refresh: 1s when < 1h remaining (seconds shown), 60s otherwise
   useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(interval);
-  }, []);
+    const updateInterval = () => {
+      const remaining = expiryAt - Date.now();
+      return remaining < 3_600_000 ? 1_000 : 60_000;
+    };
+
+    let intervalId: number;
+    const tick = () => {
+      setNow(Date.now());
+      intervalId = window.setTimeout(tick, updateInterval());
+    };
+    intervalId = window.setTimeout(tick, updateInterval());
+
+    return () => window.clearTimeout(intervalId);
+  }, [expiryAt]);
 
   const r = 8;
   const circumference = 2 * Math.PI * r;
@@ -30,10 +46,6 @@ export function ExpiryRing({ lastInteraction, expiryMinutes }: Props) {
           ? "var(--ring-orange)"
           : "var(--ring-red)";
 
-  const expiryAt = useMemo(
-    () => noteExpiryTime(lastInteraction, expiryMinutes),
-    [lastInteraction, expiryMinutes],
-  );
   const tooltipText = `Trashed ${formatRelativeTimeFromNow(expiryAt, now)}`;
 
   return (
