@@ -101,13 +101,6 @@ function App() {
     }
   }, []);
 
-  const showMainWindow = useCallback(async () => {
-    await syncMacActivationPolicy(true);
-    const window = getCurrentWindow();
-    await window.show();
-    await window.setFocus();
-  }, [syncMacActivationPolicy]);
-
   const hasCheckedOnLaunchRef = useRef(false);
 
   const checkForUpdates = useCallback(async (options: { silent?: boolean } = {}) => {
@@ -242,7 +235,6 @@ function App() {
   }, [expiryMinutes, list.active, runOrAlert]);
 
   useEffect(() => {
-    let isClosing = false;
     let disposed = false;
     const unlisteners: Array<() => void> = [];
     const registerUnlisten = (unlisten: (() => void) | null | undefined) => {
@@ -296,36 +288,34 @@ function App() {
         setShowSettings(true);
       }));
 
+      // Tray event handlers - window is already shown by Rust before these events are emitted
       if (disposed) return;
       registerUnlisten(await listen("tray-new-note", () => {
-        void runOrAlert(async () => {
-          await useNotesStore.getState().createNote();
-          await showMainWindow();
-        });
+        void runOrAlert(() => useNotesStore.getState().createNote());
       }));
 
       if (disposed) return;
       registerUnlisten(await listen("tray-show-all", () => {
-        void runOrAlert(async () => {
-          useNotesStore.getState().setViewMode("notes");
-          await showMainWindow();
-        });
+        useNotesStore.getState().setViewMode("notes");
       }));
 
       if (disposed) return;
       registerUnlisten(await listen<string>("tray-select-note", (event) => {
         const id = event.payload;
         if (!id) return;
-        void runOrAlert(async () => {
-          await useNotesStore.getState().select(id);
-          await showMainWindow();
-        });
+        void runOrAlert(() => useNotesStore.getState().select(id));
       }));
 
       if (disposed) return;
       registerUnlisten(await listen("tray-quit", () => {
         void runOrAlert(async () => {
-          await showMainWindow();
+          const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
+          if (dirtyCount === 0) {
+            await api.appExit();
+            return;
+          }
+          // Has unsaved changes - show window first for dialog visibility
+          await api.appShowMainWindow();
           const shouldQuit = await confirmUnsaved("Quit Augenblick?");
           if (!shouldQuit) return;
           await api.appExit();
@@ -335,16 +325,8 @@ function App() {
       if (disposed) return;
       registerUnlisten(await getCurrentWindow().onCloseRequested(async (event) => {
         event.preventDefault();
-        if (isClosing) return;
-        isClosing = true;
-        try {
-          const shouldHide = await confirmUnsaved("Hide Augenblick?");
-          if (!shouldHide) return;
-          await getCurrentWindow().hide();
-          await runOrAlert(() => syncMacActivationPolicy(false));
-        } finally {
-          isClosing = false;
-        }
+        await getCurrentWindow().hide();
+        await runOrAlert(() => syncMacActivationPolicy(false));
       }));
     });
 
@@ -420,7 +402,6 @@ function App() {
     checkForUpdates,
     confirmUnsaved,
     runOrAlert,
-    showMainWindow,
     syncMacActivationPolicy,
   ]);
 

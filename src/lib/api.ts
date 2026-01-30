@@ -24,5 +24,6 @@ export const api = {
   expiryRunNow: () => invoke<void>("expiry_run_now"),
   appSetActivationPolicy: (policy: "regular" | "accessory" | "prohibited") =>
     invoke<void>("app_set_activation_policy", { policy }),
+  appShowMainWindow: () => invoke<void>("app_show_main_window"),
   appExit: () => invoke<void>("app_exit"),
 };

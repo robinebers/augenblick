@@ -12,6 +12,7 @@ use app_state::AppState;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
+use window_state::show_main_window;
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
 
@@ -128,6 +129,7 @@ pub fn run() {
             app.on_menu_event(|app_handle, event| {
                 let id = event.id().0.as_str();
                 if id == "tray_new_note" {
+                    show_main_window(app_handle);
                     let _ = app_handle.emit("tray-new-note", ());
                     return;
                 }
@@ -138,11 +140,13 @@ pub fn run() {
                 }
 
                 if id == "tray_show_all" {
+                    show_main_window(app_handle);
                     let _ = app_handle.emit("tray-show-all", ());
                     return;
                 }
 
                 if let Some(note_id) = id.strip_prefix(TRAY_NOTE_PREFIX) {
+                    show_main_window(app_handle);
                     let _ = app_handle.emit("tray-select-note", note_id.to_string());
                     return;
                 }
@@ -209,6 +213,8 @@ pub fn run() {
                         ..
                     } = event
                     {
+                        // Show window directly in Rust to avoid race conditions with async JS
+                        show_main_window(tray.app_handle());
                         let _ = tray.app_handle().emit("tray-show-all", ());
                     }
                 })
@@ -237,6 +243,7 @@ pub fn run() {
             commands::app_state_set,
             commands::expiry_run_now,
             commands::app_set_activation_policy,
+            commands::app_show_main_window,
             commands::app_exit
         ])
         .run(tauri::generate_context!())
