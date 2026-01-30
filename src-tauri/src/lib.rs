@@ -26,13 +26,9 @@ fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
     // 1. Set activation policy to Regular (shows dock icon, allows activation)
     let _ = app_handle.set_activation_policy(ActivationPolicy::Regular);
 
-    // 2. Activate the app using NSApplication.activate()
-    // This is critical - without it, the window may not come to front
+    // 2. Activate the app (requires macOS 14+, enforced via minimumSystemVersion)
     if let Some(mtm) = MainThreadMarker::new() {
-        let ns_app = NSApplication::sharedApplication(mtm);
-        unsafe {
-            ns_app.activate();
-        }
+        NSApplication::sharedApplication(mtm).activate();
     }
 
     // 3. Show and focus the window
@@ -170,7 +166,6 @@ pub fn run() {
                 }
 
                 if id == "tray_quit" {
-                    show_main_window(app_handle);
                     let _ = app_handle.emit("tray-quit", ());
                     return;
                 }
