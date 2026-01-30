@@ -51,7 +51,7 @@ export function NoteItem({ note, selected, expiryMinutes, onSelect, onTogglePin,
         <ContextMenuItem onSelect={() => onTrash(note.id)}>
           <Icon name="trash" size={14} className="text-muted-foreground" />
           Trash
-          <ContextMenuShortcut>⌘W</ContextMenuShortcut>
+          <ContextMenuShortcut>Delete</ContextMenuShortcut>
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
