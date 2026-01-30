@@ -118,8 +118,8 @@ function App() {
       await update.downloadAndInstall();
 
       // Show toast with Restart button
-      toast.success("Update available", {
-        description: `Version ${update.version} is here. Restart to install.`,
+      toast.success("New update available", {
+        description: "Restart to use the latest",
         action: {
           label: "Restart",
           onClick: () => {
@@ -419,6 +419,8 @@ function App() {
               onClearTrash={() => void runOrAlert(() => actions.clearTrash())}
               onRestore={(id) => void runOrAlert(() => useNotesStore.getState().restore(id))}
               onDeleteForever={(id) => void runOrAlert(() => actions.deleteForeverFromTrash(id))}
+              onTogglePin={(id) => void runOrAlert(() => useNotesStore.getState().togglePin(id))}
+              onTrash={(id) => void runOrAlert(() => useNotesStore.getState().trash(id))}
               onNewNote={() => void runOrAlert(() => useNotesStore.getState().createNote())}
             />
           </div>
