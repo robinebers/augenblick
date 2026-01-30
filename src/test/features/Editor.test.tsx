@@ -60,6 +60,19 @@ describe("Editor", () => {
           })),
         },
       },
+      view: {
+        state: {
+          selection: {
+            empty: false,
+            content: vi.fn(() => "slice"),
+          },
+        },
+        serializeForClipboard: vi.fn(() => ({
+          dom: { innerHTML: "<h2>Copy me</h2>" },
+          text: "Copy me",
+          slice: "slice",
+        })),
+      },
       isActive: vi.fn(() => false),
       getAttributes: vi.fn(() => ({})),
       getMarkdown: vi.fn(() => "next"),
@@ -255,6 +268,7 @@ describe("Editor", () => {
     );
 
     const clipboardData = {
+      clearData: vi.fn(),
       setData: vi.fn(),
     };
     const event = {
@@ -275,6 +289,8 @@ describe("Editor", () => {
         },
       ],
     });
+    expect(editorMock.view.serializeForClipboard).toHaveBeenCalledWith("slice");
+    expect(clipboardData.setData).toHaveBeenCalledWith("text/html", "<h2>Copy me</h2>");
     expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", "Copy **me**");
 
     debugSpy.mockRestore();
@@ -293,6 +309,7 @@ describe("Editor", () => {
     );
 
     const clipboardData = {
+      clearData: vi.fn(),
       setData: vi.fn(),
     };
     const event = {
@@ -304,6 +321,8 @@ describe("Editor", () => {
 
     expect(handled).toBe(true);
     expect(event.preventDefault).toHaveBeenCalled();
+    expect(editorMock.view.serializeForClipboard).toHaveBeenCalledWith("slice");
+    expect(clipboardData.setData).toHaveBeenCalledWith("text/html", "<h2>Copy me</h2>");
     expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", "Copy **me**");
     expect(editorMock.commands.deleteSelection).toHaveBeenCalled();
 

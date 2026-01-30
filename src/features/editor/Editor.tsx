@@ -139,11 +139,19 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
             if (!editorInstance) return false;
             const clipboardData = event.clipboardData;
             if (!clipboardData) return false;
+            const view = editorInstance.view;
+            if (!view) return false;
+            const selection = view.state.selection;
+            if (selection.empty) return false;
+            const { dom } = view.serializeForClipboard(selection.content());
+            const html = dom?.innerHTML ?? "";
             const markdown = getSelectionMarkdown(editorInstance);
-            if (!markdown) return false;
+            if (!markdown && !html) return false;
             event.preventDefault();
-            clipboardData.setData("text/plain", markdown);
-            console.debug("tiptap:copy-markdown", { length: markdown.length });
+            clipboardData.clearData?.();
+            if (html) clipboardData.setData("text/html", html);
+            if (markdown) clipboardData.setData("text/plain", markdown);
+            console.debug("tiptap:copy-markdown", { length: markdown.length, html: html.length });
             return true;
           },
           cut: (_view, event) => {
@@ -152,11 +160,19 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
             if (!editorInstance) return false;
             const clipboardData = event.clipboardData;
             if (!clipboardData) return false;
+            const view = editorInstance.view;
+            if (!view) return false;
+            const selection = view.state.selection;
+            if (selection.empty) return false;
+            const { dom } = view.serializeForClipboard(selection.content());
+            const html = dom?.innerHTML ?? "";
             const markdown = getSelectionMarkdown(editorInstance);
-            if (!markdown) return false;
+            if (!markdown && !html) return false;
             event.preventDefault();
-            clipboardData.setData("text/plain", markdown);
-            console.debug("tiptap:cut-markdown", { length: markdown.length });
+            clipboardData.clearData?.();
+            if (html) clipboardData.setData("text/html", html);
+            if (markdown) clipboardData.setData("text/plain", markdown);
+            console.debug("tiptap:cut-markdown", { length: markdown.length, html: html.length });
             editorInstance.commands.deleteSelection();
             return true;
           },
