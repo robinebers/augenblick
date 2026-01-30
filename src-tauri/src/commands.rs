@@ -5,6 +5,8 @@ use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::State;
+#[cfg(target_os = "macos")]
+use tauri::ActivationPolicy;
 
 #[tauri::command]
 pub fn notes_list(state: State<'_, AppState>) -> Result<NotesList, String> {
@@ -204,6 +206,24 @@ pub fn expiry_run_now(state: State<'_, AppState>) -> Result<(), String> {
 #[tauri::command]
 pub fn app_exit(app: tauri::AppHandle) -> Result<(), String> {
     app.exit(0);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn app_set_activation_policy(app: tauri::AppHandle, policy: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let policy = match policy.as_str() {
+            "regular" => ActivationPolicy::Regular,
+            "accessory" => ActivationPolicy::Accessory,
+            "prohibited" => ActivationPolicy::Prohibited,
+            _ => return Err(format!("Unknown activation policy: {policy}")),
+        };
+        app.set_activation_policy(policy)
+            .map_err(|err| err.to_string())?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let (_app, _policy) = (app, policy);
     Ok(())
 }
 

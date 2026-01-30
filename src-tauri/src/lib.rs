@@ -236,6 +236,7 @@ pub fn run() {
             commands::app_state_get_all,
             commands::app_state_set,
             commands::expiry_run_now,
+            commands::app_set_activation_policy,
             commands::app_exit
         ])
         .run(tauri::generate_context!())
