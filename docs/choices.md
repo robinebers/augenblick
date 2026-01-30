@@ -34,3 +34,4 @@
 
 ## 2026-01-30
 - macOS app visibility: switch activation policy to `Regular` while the main window is shown (menu + Dock), back to `Accessory` when hidden (tray-only idle).
+- Clipboard copy: serialize selection via `doc.cut(from, to)` to preserve block context (e.g. headings) even for partial selections.
