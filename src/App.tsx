@@ -90,9 +90,14 @@ function App() {
   }, []);
 
   const syncMacActivationPolicy = useCallback(async (visible?: boolean) => {
-    const window = getCurrentWindow();
-    const shouldShow = visible ?? (await window.isVisible());
-    await api.appSetActivationPolicy(shouldShow ? "regular" : "accessory");
+    try {
+      const window = getCurrentWindow();
+      const shouldShow = visible ?? (await window.isVisible());
+      await api.appSetActivationPolicy(shouldShow ? "regular" : "accessory");
+    } catch (err) {
+      console.error("activation policy sync failed", err);
+      toast.error("Activation policy failed", { description: String(err) });
+    }
   }, []);
 
   const showMainWindow = useCallback(async () => {
