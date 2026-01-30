@@ -89,3 +89,36 @@ pub fn restore_and_clamp(app: &AppHandle) -> tauri::Result<()> {
 
     Ok(())
 }
+
+/// Show the main window and bring the app to front on macOS.
+/// This handles activation policy, NSApplication activation, and window focus
+/// all in Rust to avoid race conditions with async JS event handlers.
+#[cfg(target_os = "macos")]
+pub fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+    use tauri::ActivationPolicy;
+
+    // 1. Set activation policy to Regular (shows dock icon, allows activation)
+    let _ = app_handle.set_activation_policy(ActivationPolicy::Regular);
+
+    // 2. Activate the app (requires macOS 14+, enforced via minimumSystemVersion)
+    if let Some(mtm) = MainThreadMarker::new() {
+        NSApplication::sharedApplication(mtm).activate();
+    }
+
+    // 3. Show and focus the window
+    if let Some(window) = app_handle.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// Non-macOS fallback - just show and focus the window
+#[cfg(not(target_os = "macos"))]
+pub fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}

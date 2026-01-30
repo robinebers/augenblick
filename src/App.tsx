@@ -234,7 +234,6 @@ function App() {
   }, [expiryMinutes, list.active, runOrAlert]);
 
   useEffect(() => {
-    let isClosing = false;
     let disposed = false;
     const unlisteners: Array<() => void> = [];
     const registerUnlisten = (unlisten: (() => void) | null | undefined) => {
@@ -309,6 +308,13 @@ function App() {
       if (disposed) return;
       registerUnlisten(await listen("tray-quit", () => {
         void runOrAlert(async () => {
+          const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
+          if (dirtyCount === 0) {
+            await api.appExit();
+            return;
+          }
+          // Has unsaved changes - show window first for dialog visibility
+          await api.appShowMainWindow();
           const shouldQuit = await confirmUnsaved("Quit Augenblick?");
           if (!shouldQuit) return;
           await api.appExit();
@@ -318,16 +324,8 @@ function App() {
       if (disposed) return;
       registerUnlisten(await getCurrentWindow().onCloseRequested(async (event) => {
         event.preventDefault();
-        if (isClosing) return;
-        isClosing = true;
-        try {
-          const shouldHide = await confirmUnsaved("Hide Augenblick?");
-          if (!shouldHide) return;
-          await getCurrentWindow().hide();
-          await runOrAlert(() => syncMacActivationPolicy(false));
-        } finally {
-          isClosing = false;
-        }
+        await getCurrentWindow().hide();
+        await runOrAlert(() => syncMacActivationPolicy(false));
       }));
     });
 

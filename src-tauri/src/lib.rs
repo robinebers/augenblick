@@ -12,40 +12,9 @@ use app_state::AppState;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
+use window_state::show_main_window;
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
-
-/// Show the main window and bring the app to front on macOS.
-/// This handles activation policy, NSApplication activation, and window focus
-/// all in Rust to avoid race conditions with async JS event handlers.
-#[cfg(target_os = "macos")]
-fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::NSApplication;
-
-    // 1. Set activation policy to Regular (shows dock icon, allows activation)
-    let _ = app_handle.set_activation_policy(ActivationPolicy::Regular);
-
-    // 2. Activate the app (requires macOS 14+, enforced via minimumSystemVersion)
-    if let Some(mtm) = MainThreadMarker::new() {
-        NSApplication::sharedApplication(mtm).activate();
-    }
-
-    // 3. Show and focus the window
-    if let Some(window) = app_handle.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
-}
-
-/// Non-macOS fallback - just show and focus the window
-#[cfg(not(target_os = "macos"))]
-fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
-    if let Some(window) = app_handle.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -274,6 +243,7 @@ pub fn run() {
             commands::app_state_set,
             commands::expiry_run_now,
             commands::app_set_activation_policy,
+            commands::app_show_main_window,
             commands::app_exit
         ])
         .run(tauri::generate_context!())

@@ -227,6 +227,12 @@ pub fn app_set_activation_policy(app: tauri::AppHandle, policy: String) -> Resul
     Ok(())
 }
 
+#[tauri::command]
+pub fn app_show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    crate::window_state::show_main_window(&app);
+    Ok(())
+}
+
 fn get_setting_int(conn: &Connection, key: &str, default: i64) -> Result<i64, String> {
     let existing: Option<String> = conn
         .query_row(
