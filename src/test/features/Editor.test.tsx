@@ -42,9 +42,23 @@ describe("Editor", () => {
             },
           ],
         })),
+        serialize: vi.fn(() => "Copy **me**"),
       },
       state: {
         selection: { from: 1, to: 4 },
+        doc: {
+          cut: vi.fn(() => ({
+            toJSON: () => ({
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Copy me" }],
+                },
+              ],
+            }),
+          })),
+        },
       },
       isActive: vi.fn(() => false),
       getAttributes: vi.fn(() => ({})),
@@ -66,6 +80,7 @@ describe("Editor", () => {
       commands: {
         setContent: vi.fn(),
         insertContent: vi.fn(),
+        deleteSelection: vi.fn(),
         focus: vi.fn(),
       },
     };
@@ -224,6 +239,104 @@ describe("Editor", () => {
     expect(openSpy).not.toHaveBeenCalled();
 
     openSpy.mockRestore();
+    debugSpy.mockRestore();
+    await unmount();
+  });
+
+  it("copies selection as markdown", async () => {
+    const onChange = vi.fn();
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    const { unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "hello",
+        onChange,
+      }),
+    );
+
+    const clipboardData = {
+      setData: vi.fn(),
+    };
+    const event = {
+      clipboardData,
+      preventDefault: vi.fn(),
+    };
+
+    const handled = lastConfig.editorProps.handleDOMEvents.copy({}, event);
+
+    expect(handled).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(editorMock.markdown.serialize).toHaveBeenCalledWith({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Copy me" }],
+        },
+      ],
+    });
+    expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", "Copy **me**");
+
+    debugSpy.mockRestore();
+    await unmount();
+  });
+
+  it("cuts selection as markdown", async () => {
+    const onChange = vi.fn();
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    const { unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "hello",
+        onChange,
+      }),
+    );
+
+    const clipboardData = {
+      setData: vi.fn(),
+    };
+    const event = {
+      clipboardData,
+      preventDefault: vi.fn(),
+    };
+
+    const handled = lastConfig.editorProps.handleDOMEvents.cut({}, event);
+
+    expect(handled).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", "Copy **me**");
+    expect(editorMock.commands.deleteSelection).toHaveBeenCalled();
+
+    debugSpy.mockRestore();
+    await unmount();
+  });
+
+  it("pastes html before markdown", async () => {
+    const onChange = vi.fn();
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    const { unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "hello",
+        onChange,
+      }),
+    );
+
+    const clipboardData = {
+      getData: (type: string) => (type === "text/html" ? "<p><strong>Title</strong></p>" : "Title"),
+    };
+    const event = {
+      clipboardData,
+      preventDefault: vi.fn(),
+    };
+
+    const handled = lastConfig.editorProps.handleDOMEvents.paste({}, event);
+
+    expect(handled).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(editorMock.commands.insertContent).toHaveBeenCalledWith("<p><strong>Title</strong></p>");
+    expect(editorMock.markdown.parse).not.toHaveBeenCalled();
+
     debugSpy.mockRestore();
     await unmount();
   });
