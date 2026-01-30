@@ -17,18 +17,24 @@ export function formatRelativeTime(fromMs: number, toMs = Date.now()): string {
 
 export function formatRelativeTimeFromNow(targetMs: number, nowMs = Date.now()): string {
   const deltaMs = targetMs - nowMs;
-  const deltaSeconds = Math.ceil(deltaMs / 1000);
+  if (deltaMs <= 0) return "now";
 
-  if (deltaSeconds <= 0) return "now";
-  if (deltaSeconds < 10) return "in a moment";
-  if (deltaSeconds < 60) return `in ${deltaSeconds}s`;
+  const totalSeconds = Math.floor(deltaMs / 1000);
+  if (totalSeconds < 10) return "in a moment";
 
-  const deltaMinutes = Math.ceil(deltaSeconds / 60);
-  if (deltaMinutes < 60) return `in ${deltaMinutes}m`;
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
-  const deltaHours = Math.ceil(deltaMinutes / 60);
-  if (deltaHours < 24) return `in ${deltaHours}h`;
-
-  const deltaDays = Math.ceil(deltaHours / 24);
-  return `in ${deltaDays}d`;
+  if (days > 0) {
+    return hours > 0 ? `in ${days}d ${hours}h` : `in ${days}d`;
+  }
+  if (hours > 0) {
+    return minutes > 0 ? `in ${hours}h ${minutes}m` : `in ${hours}h`;
+  }
+  if (minutes > 0) {
+    return seconds > 0 ? `in ${minutes}m ${seconds}s` : `in ${minutes}m`;
+  }
+  return `in ${seconds}s`;
 }
