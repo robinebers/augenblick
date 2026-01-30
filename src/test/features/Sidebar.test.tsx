@@ -187,7 +187,7 @@ describe("Sidebar", () => {
     expect(container.textContent).toContain("Trash is empty");
 
     const emptyButton = Array.from(container.querySelectorAll("button")).find((btn) =>
-      btn.textContent?.includes("Empty Trash"),
+      btn.textContent?.includes("Empty trash"),
     ) as HTMLButtonElement | undefined;
     expect(emptyButton?.disabled).toBe(true);
 
@@ -219,7 +219,7 @@ describe("Sidebar", () => {
     );
 
     const emptyButton = Array.from(container.querySelectorAll("button")).find((btn) =>
-      btn.textContent?.includes("Empty Trash"),
+      btn.textContent?.includes("Empty trash"),
     ) as HTMLButtonElement | undefined;
     emptyButton?.click();
     expect(onClearTrash).toHaveBeenCalled();

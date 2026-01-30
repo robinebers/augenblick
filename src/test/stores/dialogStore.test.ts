@@ -51,4 +51,12 @@ describe("dialogStore", () => {
     resolveDialog("cancel");
     await expect(cancelPromise).resolves.toBe(false);
   });
+
+  it("confirmDialog uses destructive variant when specified", async () => {
+    const promise = confirmDialog({ title: "Delete?", destructive: true });
+    const req = useDialogStore.getState().request;
+    expect(req?.actions[0]?.variant).toBe("destructive");
+    resolveDialog("confirm");
+    await promise;
+  });
 });

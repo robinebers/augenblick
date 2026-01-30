@@ -292,4 +292,74 @@ describe("pageHotkeys", () => {
     handler(e);
     expect(deps.closeCurrent).toHaveBeenCalled();
   });
+
+  it("creates note on Cmd+N", () => {
+    const deps = {
+      getNotesSnapshot: () => ({ list: { active: [], trashed: [] }, selectedId: null, viewMode: "notes" as const }),
+      getSelectedId: () => null,
+      toggleCommandPalette: vi.fn(),
+      closeCommandPalette: vi.fn(),
+      openSettings: vi.fn(),
+      setViewMode: vi.fn(),
+      createNote: vi.fn(),
+      togglePinCurrent: vi.fn(),
+      closeCurrent: vi.fn(),
+      openMarkdown: vi.fn(),
+      saveCurrent: vi.fn(),
+      saveAs: vi.fn(),
+      selectNote: vi.fn(),
+      undoReorder: vi.fn(),
+      redoReorder: vi.fn(),
+    };
+
+    const handler = createPageKeydownHandler(deps);
+    const e = {
+      key: "n",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      target: document.body,
+      preventDefault: vi.fn(),
+      altKey: false,
+    } as unknown as KeyboardEvent;
+
+    handler(e);
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(deps.createNote).toHaveBeenCalled();
+  });
+
+  it("toggles pin on Cmd+P", () => {
+    const deps = {
+      getNotesSnapshot: () => ({ list: { active: [], trashed: [] }, selectedId: null, viewMode: "notes" as const }),
+      getSelectedId: () => null,
+      toggleCommandPalette: vi.fn(),
+      closeCommandPalette: vi.fn(),
+      openSettings: vi.fn(),
+      setViewMode: vi.fn(),
+      createNote: vi.fn(),
+      togglePinCurrent: vi.fn(),
+      closeCurrent: vi.fn(),
+      openMarkdown: vi.fn(),
+      saveCurrent: vi.fn(),
+      saveAs: vi.fn(),
+      selectNote: vi.fn(),
+      undoReorder: vi.fn(),
+      redoReorder: vi.fn(),
+    };
+
+    const handler = createPageKeydownHandler(deps);
+    const e = {
+      key: "p",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      target: document.body,
+      preventDefault: vi.fn(),
+      altKey: false,
+    } as unknown as KeyboardEvent;
+
+    handler(e);
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(deps.togglePinCurrent).toHaveBeenCalled();
+  });
 });
