@@ -215,6 +215,19 @@ function App() {
     return true;
   }, []);
 
+  const requestQuit = useCallback(async () => {
+    const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
+    if (dirtyCount === 0) {
+      await api.appExit();
+      return;
+    }
+    // Has unsaved changes - show window first for dialog visibility
+    await api.appShowMainWindow();
+    const shouldQuit = await confirmUnsaved("Quit Augenblick?");
+    if (!shouldQuit) return;
+    await api.appExit();
+  }, [confirmUnsaved]);
+
   useEffect(() => {
     let nextExpiryAt: number | null = null;
 
@@ -288,6 +301,11 @@ function App() {
         setShowSettings(true);
       }));
 
+      if (disposed) return;
+      registerUnlisten(await listen("menu-quit", () => {
+        void runOrAlert(requestQuit);
+      }));
+
       // Tray event handlers - window is already shown by Rust before these events are emitted
       if (disposed) return;
       registerUnlisten(await listen("tray-new-note", () => {
@@ -308,18 +326,7 @@ function App() {
 
       if (disposed) return;
       registerUnlisten(await listen("tray-quit", () => {
-        void runOrAlert(async () => {
-          const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
-          if (dirtyCount === 0) {
-            await api.appExit();
-            return;
-          }
-          // Has unsaved changes - show window first for dialog visibility
-          await api.appShowMainWindow();
-          const shouldQuit = await confirmUnsaved("Quit Augenblick?");
-          if (!shouldQuit) return;
-          await api.appExit();
-        });
+        void runOrAlert(requestQuit);
       }));
 
       if (disposed) return;

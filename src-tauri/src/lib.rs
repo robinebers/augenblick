@@ -9,7 +9,7 @@ mod types;
 mod window_state;
 
 use app_state::AppState;
-use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 use window_state::show_main_window;
@@ -35,7 +35,9 @@ pub fn run() {
             let _ = window_state::restore_and_clamp(&app_handle);
             show_main_window(&app_handle);
 
-            let quit_item = PredefinedMenuItem::quit(app, Some("Quit Augenblick"))
+            let quit_item = MenuItemBuilder::with_id("app_quit", "Quit Augenblick")
+                .accelerator("CmdOrCtrl+KeyQ")
+                .build(app)
                 .map_err(|err| std::io::Error::other(err.to_string()))?;
             let settings_item = MenuItemBuilder::with_id("app_settings", "Settings…")
                 .accelerator("CmdOrCtrl+Comma")
@@ -141,6 +143,11 @@ pub fn run() {
 
                 if id == "tray_quit" {
                     let _ = app_handle.emit("tray-quit", ());
+                    return;
+                }
+
+                if id == "app_quit" {
+                    let _ = app_handle.emit("menu-quit", ());
                     return;
                 }
 
