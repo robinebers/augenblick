@@ -27,6 +27,7 @@ type Deps = {
   openMarkdown: () => void;
   saveCurrent: () => void;
   saveAs: () => void;
+  quit?: () => void;
   selectNote: (id: string) => void;
   undoReorder: () => void;
   redoReorder: () => void;
@@ -64,6 +65,12 @@ export function createPageKeydownHandler(deps: Deps) {
     if (key === "k") {
       e.preventDefault();
       deps.toggleCommandPalette();
+      return;
+    }
+
+    if (key === "q") {
+      e.preventDefault();
+      deps.quit?.();
       return;
     }
 

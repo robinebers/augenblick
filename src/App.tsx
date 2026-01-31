@@ -373,6 +373,9 @@ function App() {
       openMarkdown: () => {
         void runOrAlert(() => actions.openMarkdown());
       },
+      quit: () => {
+        void runOrAlert(requestQuit);
+      },
       saveCurrent: () => {
         void runOrAlert(() => actions.saveCurrent());
       },
