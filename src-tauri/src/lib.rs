@@ -147,7 +147,16 @@ pub fn run() {
                 }
 
                 if id == "app_quit" {
-                    let _ = app_handle.emit("menu-quit", ());
+                    // Fallback: if window isn't visible/ready, quit directly
+                    // (no dirty notes possible if user hasn't interacted yet)
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        if window.is_visible().unwrap_or(false) {
+                            let _ = app_handle.emit("menu-quit", ());
+                            return;
+                        }
+                    }
+                    // No visible window - safe to quit directly
+                    app_handle.exit(0);
                     return;
                 }
 
