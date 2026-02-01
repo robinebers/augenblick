@@ -147,16 +147,13 @@ pub fn run() {
                 }
 
                 if id == "app_quit" {
-                    // Fallback: if window isn't visible/ready, quit directly
-                    // (no dirty notes possible if user hasn't interacted yet)
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        if window.is_visible().unwrap_or(false) {
-                            let _ = app_handle.emit("menu-quit", ());
-                            return;
-                        }
+                    // If window exists, JS is likely alive - emit event for dirty notes check
+                    // Only fallback to direct exit if no window exists at all
+                    if app_handle.get_webview_window("main").is_some() {
+                        let _ = app_handle.emit("menu-quit", ());
+                    } else {
+                        app_handle.exit(0);
                     }
-                    // No visible window - safe to quit directly
-                    app_handle.exit(0);
                     return;
                 }
 
