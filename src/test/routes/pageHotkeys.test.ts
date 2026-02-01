@@ -213,6 +213,7 @@ describe("pageHotkeys", () => {
       openMarkdown: vi.fn(),
       saveCurrent: vi.fn(),
       saveAs: vi.fn(),
+      quit: vi.fn(),
       selectNote: vi.fn(),
       undoReorder: vi.fn(),
       redoReorder: vi.fn(),
@@ -257,6 +258,42 @@ describe("pageHotkeys", () => {
       } as unknown as KeyboardEvent,
     );
     expect(deps.openMarkdown).toHaveBeenCalled();
+  });
+
+  it("quits on Cmd+Q", () => {
+    const deps = {
+      getNotesSnapshot: () => ({ list: { active: [], trashed: [] }, selectedId: null, viewMode: "notes" as const }),
+      getSelectedId: () => null,
+      toggleCommandPalette: vi.fn(),
+      closeCommandPalette: vi.fn(),
+      openSettings: vi.fn(),
+      setViewMode: vi.fn(),
+      createNote: vi.fn(),
+      togglePinCurrent: vi.fn(),
+      closeCurrent: vi.fn(),
+      openMarkdown: vi.fn(),
+      saveCurrent: vi.fn(),
+      saveAs: vi.fn(),
+      quit: vi.fn(),
+      selectNote: vi.fn(),
+      undoReorder: vi.fn(),
+      redoReorder: vi.fn(),
+    };
+    const handler = createPageKeydownHandler(deps);
+
+    const e = {
+      key: "q",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      target: document.body,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+
+    handler(e);
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(deps.quit).toHaveBeenCalled();
   });
 
   it("trashes note on Delete when not typing", () => {
