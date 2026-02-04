@@ -337,10 +337,6 @@ function App() {
       }));
     });
 
-    const heartbeat = window.setInterval(() => {
-      void useNotesStore.getState().heartbeatSelected();
-    }, 30_000);
-
     const onKeyDown = createPageKeydownHandler({
       getNotesSnapshot: () => {
         const s = useNotesStore.getState();
@@ -397,7 +393,6 @@ function App() {
 
     return () => {
       disposed = true;
-      window.clearInterval(heartbeat);
       window.removeEventListener("keydown", onKeyDown);
       if (updateCheckTimeoutIdRef.current != null) {
         window.clearTimeout(updateCheckTimeoutIdRef.current);

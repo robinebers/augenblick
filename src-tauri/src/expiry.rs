@@ -15,14 +15,15 @@ pub fn start_background_sweeper(state: AppState) {
 
 pub fn sweep(state: &AppState) -> Result<(), String> {
     let now = notes::now_ms();
-    let (expiry_minutes, trash_days) = {
+    let (expiry_minutes, trash_days, selected_note_id) = {
         let conn = state
             .db
             .lock()
             .map_err(|_| "DB lock poisoned".to_string())?;
         let expiry_minutes = get_int_setting(&conn, "expiry_minutes", 10_080)?;
         let trash_days = get_int_setting(&conn, "trash_retention_days", 30)?;
-        (expiry_minutes, trash_days)
+        let selected_note_id = get_app_state_string(&conn, "selectedNoteId")?;
+        (expiry_minutes, trash_days, selected_note_id)
     };
 
     let expiry_ms = expiry_minutes * 60_000;
@@ -33,7 +34,7 @@ pub fn sweep(state: &AppState) -> Result<(), String> {
             .db
             .lock()
             .map_err(|_| "DB lock poisoned".to_string())?;
-        trash_expired(&conn, state, now - expiry_ms)?;
+        trash_expired(&conn, state, now - expiry_ms, selected_note_id.as_deref())?;
         drop_expired_trash(&conn, state, now - trash_ms)?;
     }
 
@@ -44,25 +45,44 @@ fn trash_expired(
     conn: &Connection,
     state: &AppState,
     cutoff_last_interaction: i64,
+    selected_note_id: Option<&str>,
 ) -> Result<(), String> {
-    let mut stmt = conn
-        .prepare(
-            r#"
+    let ids = if let Some(selected_note_id) = selected_note_id {
+        let mut stmt = conn
+            .prepare(
+                r#"
+	SELECT id FROM notes
+	WHERE is_trashed = 0
+	  AND is_pinned = 0
+	  AND last_interaction <= ?1
+	  AND id != ?2
+"#,
+            )
+            .map_err(|err| err.to_string())?;
+        let rows = stmt
+            .query_map(params![cutoff_last_interaction, selected_note_id], |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(|err| err.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())?
+    } else {
+        let mut stmt = conn
+            .prepare(
+                r#"
 	SELECT id FROM notes
 	WHERE is_trashed = 0
 	  AND is_pinned = 0
 	  AND last_interaction <= ?1
 "#,
-        )
-        .map_err(|err| err.to_string())?;
-
-    let ids = stmt
-        .query_map(params![cutoff_last_interaction], |row| {
-            row.get::<_, String>(0)
-        })
-        .map_err(|err| err.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| err.to_string())?;
+            )
+            .map_err(|err| err.to_string())?;
+        let rows = stmt
+            .query_map(params![cutoff_last_interaction], |row| row.get::<_, String>(0))
+            .map_err(|err| err.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())?
+    };
 
     for id in ids {
         if let Err(err) = crate::notes::trash(conn, &state.paths, &id) {
@@ -140,4 +160,14 @@ fn get_int_setting(conn: &Connection, key: &str, default: i64) -> Result<i64, St
     .map_err(|err| err.to_string())?;
 
     Ok(default)
+}
+
+fn get_app_state_string(conn: &Connection, key: &str) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT value FROM app_state WHERE key = ?1 LIMIT 1",
+        params![key],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|err| err.to_string())
 }

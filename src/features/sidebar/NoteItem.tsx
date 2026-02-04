@@ -45,7 +45,7 @@ export function NoteItem({ note, selected, dirty, expiryMinutes, onSelect, onTog
           </div>
 
           {!note.isTrashed && !note.isPinned ? (
-            <ExpiryRing lastInteraction={note.lastInteraction} expiryMinutes={expiryMinutes} />
+            <ExpiryRing lastInteraction={note.lastInteraction} expiryMinutes={expiryMinutes} paused={selected} />
           ) : null}
         </button>
       </ContextMenuTrigger>

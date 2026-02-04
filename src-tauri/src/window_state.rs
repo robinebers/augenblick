@@ -114,6 +114,25 @@ pub fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
     }
 }
 
+#[cfg(target_os = "macos")]
+pub fn show_main_window_if_hidden<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
+    let Some(window) = app_handle.get_webview_window("main") else {
+        return;
+    };
+
+    let is_visible = window.is_visible().unwrap_or(true);
+    let is_minimized = window.is_minimized().unwrap_or(false);
+    if is_visible && !is_minimized {
+        return;
+    }
+
+    if is_minimized {
+        let _ = window.unminimize();
+    }
+
+    show_main_window(app_handle);
+}
+
 /// Non-macOS fallback - just show and focus the window
 #[cfg(not(target_os = "macos"))]
 pub fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {

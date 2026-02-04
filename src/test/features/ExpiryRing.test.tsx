@@ -37,6 +37,24 @@ describe("ExpiryRing", () => {
     await unmount();
   });
 
+  it("renders paused state as full green ring", async () => {
+    const { container, unmount } = await render(
+      React.createElement((await import("@/features/sidebar/ExpiryRing")).ExpiryRing, {
+        lastInteraction: Date.now() - 10 * 60_000,
+        expiryMinutes: 60,
+        paused: true,
+      }),
+    );
+
+    const trigger = container.querySelector('[aria-label="Active (expiry paused)"]') as HTMLElement;
+    expect(trigger).toBeTruthy();
+
+    const rings = container.querySelectorAll("circle");
+    expect(rings[1]?.getAttribute("stroke")).toBe("var(--ring-green)");
+
+    await unmount();
+  });
+
   it("renders aging color", async () => {
     const { container, unmount } = await render(
       React.createElement((await import("@/features/sidebar/ExpiryRing")).ExpiryRing, {

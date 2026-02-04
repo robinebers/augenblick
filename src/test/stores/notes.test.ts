@@ -258,6 +258,33 @@ describe("notesStore", () => {
     expect(apiMock.noteSetActive).toHaveBeenCalledTimes(2);
   });
 
+  it("bumps lastInteraction when switching selection", async () => {
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    const n1 = meta({ id: "n1", lastInteraction: 111 });
+    const n2 = meta({ id: "n2", lastInteraction: 222 });
+    apiMock.notesList.mockResolvedValue({ active: [n1, n2], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+
+    const t1 = Date.now();
+    apiMock.noteGet.mockResolvedValueOnce({ meta: { ...n1, lastInteraction: t1 }, content: "one" });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+    await useNotesStore.getState().select("n1");
+
+    const afterFirst = useNotesStore.getState().list.active.find((n) => n.id === "n1");
+    expect(afterFirst?.lastInteraction).toBe(t1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    const t2 = Date.now();
+    apiMock.noteGet.mockResolvedValueOnce({ meta: { ...n2, lastInteraction: t2 }, content: "two" });
+    await useNotesStore.getState().select("n2");
+
+    const afterSecond = useNotesStore.getState().list.active.find((n) => n.id === "n2");
+    expect(afterSecond?.lastInteraction).toBe(t2);
+    expect(apiMock.noteSetActive.mock.calls.map((call) => call[0])).toEqual(["n1", "n1", "n2"]);
+  });
+
   it("marks saved notes dirty and saves on demand", async () => {
     const saved = meta({ id: "s1", storage: "saved" });
     const saved2 = meta({
@@ -316,6 +343,7 @@ describe("notesStore", () => {
     await useNotesStore.getState().select("t1");
 
     expect(useNotesStore.getState().viewMode).toBe("trash");
+    expect(apiMock.noteSetActive).not.toHaveBeenCalled();
   });
 
   it("refreshes list", async () => {

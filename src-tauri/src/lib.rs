@@ -15,10 +15,14 @@ use tauri::{AppHandle, Emitter, Manager};
 use window_state::show_main_window;
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
+#[cfg(target_os = "macos")]
+use tauri::RunEvent;
+#[cfg(target_os = "macos")]
+use window_state::show_main_window_if_hidden;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -264,8 +268,15 @@ pub fn run() {
             commands::app_show_main_window,
             commands::app_exit
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Resumed = event {
+            show_main_window_if_hidden(app_handle);
+        }
+    });
 }
 
 fn build_tray_menu<R: tauri::Runtime>(

@@ -6,9 +6,10 @@ import { formatRelativeTimeFromNow } from "@/lib/utils/time";
 type Props = {
   lastInteraction: number;
   expiryMinutes: number;
+  paused?: boolean;
 };
 
-export function ExpiryRing({ lastInteraction, expiryMinutes }: Props) {
+export function ExpiryRing({ lastInteraction, expiryMinutes, paused = false }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const expiryAt = useMemo(
     () => noteExpiryTime(lastInteraction, expiryMinutes),
@@ -17,6 +18,7 @@ export function ExpiryRing({ lastInteraction, expiryMinutes }: Props) {
 
   // Adaptive refresh: 1s when < 1h remaining (seconds shown), 60s otherwise
   useEffect(() => {
+    if (paused) return;
     const updateInterval = () => {
       const remaining = expiryAt - Date.now();
       return remaining < 3_600_000 ? 1_000 : 60_000;
@@ -30,13 +32,13 @@ export function ExpiryRing({ lastInteraction, expiryMinutes }: Props) {
     intervalId = window.setTimeout(tick, updateInterval());
 
     return () => window.clearTimeout(intervalId);
-  }, [expiryAt]);
+  }, [expiryAt, paused]);
 
   const r = 8;
   const circumference = 2 * Math.PI * r;
-  const progress = expiryProgress(lastInteraction, expiryMinutes, now);
+  const progress = paused ? 1 : expiryProgress(lastInteraction, expiryMinutes, now);
   const dashOffset = circumference * (1 - progress);
-  const status = expiryStatus(progress);
+  const status = paused ? "fresh" : expiryStatus(progress);
   const stroke =
     status === "fresh"
       ? "var(--ring-green)"
@@ -46,7 +48,9 @@ export function ExpiryRing({ lastInteraction, expiryMinutes }: Props) {
           ? "var(--ring-orange)"
           : "var(--ring-red)";
 
-  const tooltipText = `Trashed ${formatRelativeTimeFromNow(expiryAt, now)}`;
+  const tooltipText = paused
+    ? "Active (expiry paused)"
+    : `Trashed ${formatRelativeTimeFromNow(expiryAt, now)}`;
 
   return (
     <TooltipProvider delayDuration={550}>

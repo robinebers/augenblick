@@ -189,6 +189,24 @@ function sortTrashed(notes: NoteMeta[]) {
   });
 }
 
+function findMetaById(list: NotesList, id: string | null) {
+  if (!id) return null;
+  return list.active.find((n) => n.id === id) ?? list.trashed.find((n) => n.id === id) ?? null;
+}
+
+function bumpLastInteraction(list: NotesList, id: string, now: number): NotesList {
+  let changed = false;
+  const update = (note: NoteMeta) => {
+    if (note.id !== id) return note;
+    if (note.lastInteraction === now) return note;
+    changed = true;
+    return { ...note, lastInteraction: now };
+  };
+  const active = list.active.map(update);
+  const trashed = list.trashed.map(update);
+  return changed ? { active, trashed } : list;
+}
+
 export const useNotesStore = create<NotesState>((set, get) => ({
   ...DEFAULT_STATE,
   init: async () => {
@@ -247,17 +265,37 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   select: async (id) => {
     const before = get();
     const shouldOpenTrash = before.list.trashed.some((n) => n.id === id);
-    set((s) => ({
-      ...s,
-      selectedId: id,
-      viewMode: shouldOpenTrash ? "trash" : s.viewMode,
-    }));
+    const prevId = before.selectedId;
+    const prevMeta = findMetaById(before.list, prevId);
+    const nextMeta = findMetaById(before.list, id);
+    const now = Date.now();
+    const shouldBumpPrev = !!prevId && prevId !== id && prevMeta && !prevMeta.isTrashed;
+    const shouldBumpNext = !!nextMeta && !nextMeta.isTrashed;
+
+    set((s) => {
+      let list = s.list;
+      if (shouldBumpPrev && prevId) list = bumpLastInteraction(list, prevId, now);
+      if (shouldBumpNext) list = bumpLastInteraction(list, id, now);
+      return {
+        ...s,
+        list,
+        selectedId: id,
+        viewMode: shouldOpenTrash ? "trash" : s.viewMode,
+      };
+    });
     scheduleAppStateWrite(get);
+
+    if (shouldBumpPrev && prevId) {
+      await api.noteSetActive(prevId);
+    }
+
+    if (shouldBumpNext) {
+      await api.noteSetActive(id);
+    }
 
     const state = get();
     const cached = state.contentById[id];
     if (typeof cached === "string") {
-      await api.noteSetActive(id);
       return;
     }
 
@@ -272,7 +310,6 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       };
     });
 
-    await api.noteSetActive(id);
   },
   setViewMode: (viewMode) => {
     set((s) => ({ ...s, viewMode }));

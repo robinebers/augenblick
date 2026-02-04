@@ -298,9 +298,11 @@ async function invokeWeb(cmd: string, args: Record<string, unknown> | undefined)
     case "expiry_run_now": {
       const expiryMinutes = db.settings?.expiryMinutes ?? DEFAULT_SETTINGS.expiryMinutes;
       const cutoff = now() - Math.max(1, expiryMinutes) * 60_000;
+      const selectedNoteId = db.appState?.selectedNoteId ?? null;
       for (const entry of Object.values(db.notes)) {
         if (entry.meta.isTrashed) continue;
         if (entry.meta.isPinned) continue;
+        if (selectedNoteId && entry.meta.id === selectedNoteId) continue;
         if (entry.meta.lastInteraction > cutoff) continue;
         const t = now();
         entry.meta = { ...entry.meta, isTrashed: true, isPinned: false, trashedAt: t };
