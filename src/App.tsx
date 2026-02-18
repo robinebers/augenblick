@@ -36,6 +36,14 @@ const LazyTrashPreview = lazy(() =>
   import("@/features/editor/TrashPreview").then((mod) => ({ default: mod.TrashPreview })),
 );
 
+type QuitWindow = Window & {
+  __augenblickQuitInProgress?: boolean;
+};
+
+function setQuitInProgress(value: boolean) {
+  (window as QuitWindow).__augenblickQuitInProgress = value;
+}
+
 function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -165,16 +173,32 @@ function App() {
   }, []);
 
   const requestQuit = useCallback(async () => {
+    setQuitInProgress(false);
     const dirtyCount = getDirtySavedCount(useNotesStore.getState());
     if (dirtyCount === 0) {
-      await api.appExit();
+      setQuitInProgress(true);
+      try {
+        await api.appExit();
+      } catch (err) {
+        setQuitInProgress(false);
+        throw err;
+      }
       return;
     }
     // Has unsaved changes - show window first for dialog visibility
     await api.appShowMainWindow();
     const shouldQuit = await confirmUnsaved("Quit Augenblick?");
-    if (!shouldQuit) return;
-    await api.appExit();
+    if (!shouldQuit) {
+      setQuitInProgress(false);
+      return;
+    }
+    setQuitInProgress(true);
+    try {
+      await api.appExit();
+    } catch (err) {
+      setQuitInProgress(false);
+      throw err;
+    }
   }, [confirmUnsaved]);
 
   const isBootstrapped = useAppBootstrap({

@@ -4,6 +4,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { createPageKeydownHandler } from "@/routes/pageHotkeys";
 import { useNotesStore } from "@/stores/notesStore";
 
+type QuitWindow = Window & {
+  __augenblickQuitInProgress?: boolean;
+};
+
 type Actions = {
   openMarkdown: () => Promise<void>;
   saveCurrent: () => Promise<void>;
@@ -82,6 +86,7 @@ export function useWindowAndMenuEvents({
       if (disposed) return;
       registerUnlisten(
         await getCurrentWindow().onCloseRequested(async (event) => {
+          if ((window as QuitWindow).__augenblickQuitInProgress) return;
           event.preventDefault();
           await getCurrentWindow().hide();
           await runOrAlert(() => syncMacActivationPolicy(false));
