@@ -12,7 +12,7 @@ use app_state::AppState;
 use tauri::menu::{AboutMetadata, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
-use window_state::show_main_window;
+use window_state::{show_main_window, toggle_main_window, MainWindowToggleResult};
 #[cfg(target_os = "macos")]
 use tauri::ActivationPolicy;
 #[cfg(target_os = "macos")]
@@ -232,12 +232,13 @@ pub fn run() {
                     }
                     if let TrayIconEvent::Click {
                         button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
                         ..
                     } = event
                     {
-                        // Show window directly in Rust to avoid race conditions with async JS
-                        show_main_window(tray.app_handle());
-                        let _ = tray.app_handle().emit("tray-show-all", ());
+                        if toggle_main_window(tray.app_handle()) == MainWindowToggleResult::Shown {
+                            let _ = tray.app_handle().emit("tray-show-all", ());
+                        }
                     }
                 })
                 .build(&app_handle)
@@ -273,8 +274,10 @@ pub fn run() {
 
     app.run(|app_handle, event| {
         #[cfg(target_os = "macos")]
-        if let RunEvent::Resumed = event {
-            show_main_window_if_hidden(app_handle);
+        match event {
+            RunEvent::Resumed => show_main_window_if_hidden(app_handle),
+            RunEvent::Reopen { .. } => show_main_window(app_handle),
+            _ => {}
         }
     });
 }

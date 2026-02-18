@@ -69,7 +69,7 @@ const notesState = {
   viewMode: "notes",
   sidebarWidth: 240,
   contentById: {},
-  dirtySavedById: {},
+  lastSavedContentById: {},
   init: vi.fn(async () => {}),
   refresh: vi.fn(async () => {}),
   createNote: vi.fn(async () => {}),

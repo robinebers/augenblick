@@ -161,14 +161,69 @@ describe("Editor", () => {
       }),
     );
 
-    expect(editorMock.commands.setContent).toHaveBeenCalledWith("two", { contentType: "markdown" });
+    expect(editorMock.commands.setContent).toHaveBeenCalledWith("two", {
+      contentType: "markdown",
+      emitUpdate: false,
+    });
 
     await act(async () => {
       window.dispatchEvent(new Event("augenblick:focus-editor"));
     });
 
     expect(editorMock.commands.focus).toHaveBeenCalledWith("end");
+    expect(editorMock.setEditable).toHaveBeenCalledWith(true, false);
 
+    await unmount();
+  });
+
+  it("does not call onChange for external value sync", async () => {
+    const onChange = vi.fn();
+    editorMock.getMarkdown.mockReturnValue("normalized value");
+    editorMock.commands.setContent.mockImplementation((_value: string, options?: { emitUpdate?: boolean }) => {
+      if (options?.emitUpdate === false) return true;
+      lastConfig.onUpdate({ editor: editorMock });
+      return true;
+    });
+
+    const { rerender, unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "original",
+        onChange,
+      }),
+    );
+
+    await rerender(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "from-open-file",
+        onChange,
+      }),
+    );
+
+    expect(editorMock.commands.setContent).toHaveBeenCalledWith("from-open-file", {
+      contentType: "markdown",
+      emitUpdate: false,
+    });
+    expect(onChange).not.toHaveBeenCalled();
+    await unmount();
+  });
+
+  it("does not call onChange for initial markdown normalization", async () => {
+    const onChange = vi.fn();
+    editorMock.getMarkdown.mockReturnValue("normalized");
+
+    const { unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "raw",
+        onChange,
+      }),
+    );
+
+    await act(async () => {
+      lastConfig.onCreate?.({ editor: editorMock });
+      lastConfig.onUpdate({ editor: editorMock });
+    });
+
+    expect(onChange).not.toHaveBeenCalled();
     await unmount();
   });
 

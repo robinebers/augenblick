@@ -24,6 +24,7 @@ import { CommandPalette } from "@/features/command/CommandPalette";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { createPageActions } from "@/routes/pageActions";
 import { openDialog, confirmDialog } from "@/stores/dialogStore";
+import { getDirtySavedCount, getDirtySavedMap, isNoteDirty } from "@/stores/notes/dirty";
 import { useNotesStore } from "@/stores/notesStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { api } from "@/lib/api";
@@ -49,7 +50,7 @@ function App() {
   const viewMode = useNotesStore((s) => s.viewMode);
   const sidebarWidth = useNotesStore((s) => s.sidebarWidth);
   const contentById = useNotesStore((s) => s.contentById);
-  const dirtySavedById = useNotesStore((s) => s.dirtySavedById);
+  const lastSavedContentById = useNotesStore((s) => s.lastSavedContentById);
 
   const expiryMinutes = useSettingsStore((s) => s.expiryMinutes);
   const trashRetentionDays = useSettingsStore((s) => s.trashRetentionDays);
@@ -58,6 +59,10 @@ function App() {
   const pinned = useMemo(() => list.active.filter((n) => n.isPinned), [list.active]);
   const notes = useMemo(() => list.active.filter((n) => !n.isPinned), [list.active]);
   const trashed = useMemo(() => list.trashed, [list.trashed]);
+  const dirtySavedById = useMemo(
+    () => getDirtySavedMap({ list, contentById, lastSavedContentById }),
+    [contentById, lastSavedContentById, list],
+  );
 
   const selectedMeta = useMemo(() => {
     if (!selectedId) return null;
@@ -132,7 +137,7 @@ function App() {
         const s = useNotesStore.getState();
         return s.list.active.find((n) => n.id === id) ?? s.list.trashed.find((n) => n.id === id) ?? null;
       },
-      isDirtySaved: (id) => Boolean(useNotesStore.getState().dirtySavedById[id]),
+      isDirtySaved: (id) => isNoteDirty(useNotesStore.getState(), id),
       getSidebarWidth: () => useNotesStore.getState().sidebarWidth,
       setSidebarWidth: (width) => useNotesStore.getState().setSidebarWidth(width),
       getTrashedCount: () => useNotesStore.getState().list.trashed.length,
@@ -140,7 +145,7 @@ function App() {
   }, []);
 
   const confirmUnsaved = useCallback(async (title: string) => {
-    const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
+    const dirtyCount = getDirtySavedCount(useNotesStore.getState());
     if (dirtyCount === 0) return true;
 
     const choice = await openDialog({
@@ -160,7 +165,7 @@ function App() {
   }, []);
 
   const requestQuit = useCallback(async () => {
-    const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
+    const dirtyCount = getDirtySavedCount(useNotesStore.getState());
     if (dirtyCount === 0) {
       await api.appExit();
       return;

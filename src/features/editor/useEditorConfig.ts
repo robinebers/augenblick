@@ -91,6 +91,9 @@ export function useEditorConfig({ value, onChange, readOnly }: Params) {
       content: value,
       contentType: "markdown",
       editable: !readOnly,
+      onCreate: ({ editor }) => {
+        lastMarkdownRef.current = editor.getMarkdown();
+      },
       onUpdate: ({ editor }) => {
         const next = editor.getMarkdown();
         if (next === lastMarkdownRef.current) return;
@@ -137,7 +140,7 @@ export function useEditorConfig({ value, onChange, readOnly }: Params) {
 
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(!readOnly);
+    editor.setEditable(!readOnly, false);
   }, [editor, readOnly]);
 
   useEffect(() => {
@@ -148,7 +151,7 @@ export function useEditorConfig({ value, onChange, readOnly }: Params) {
     if (!editor) return;
     if (value === lastMarkdownRef.current) return;
     lastMarkdownRef.current = value;
-    editor.commands.setContent(value, { contentType: "markdown" });
+    editor.commands.setContent(value, { contentType: "markdown", emitUpdate: false });
   }, [editor, value]);
 
   useEffect(() => {
