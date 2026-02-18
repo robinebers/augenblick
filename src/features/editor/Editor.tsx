@@ -12,6 +12,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import { Icon } from "@/components/icons/Icon";
+import { getMarkdownFromClipboard, shouldHandleMarkdownPaste } from "@/features/editor/clipboardPolicy";
 
 type Props = {
   value: string;
@@ -47,17 +48,6 @@ async function openLink(href: string) {
     console.debug("tiptap:link-open-fallback", { href, error });
     window.open(href, "_blank");
   }
-}
-
-function getSelectionMarkdown(editorInstance: NonNullable<ReturnType<typeof useEditor>>) {
-  if (!editorInstance.markdown) return "";
-  const { from, to } = editorInstance.state.selection;
-  if (from === to) return "";
-  const selectionDoc = editorInstance.state.doc.cut(from, to);
-  const content = selectionDoc?.toJSON?.();
-  if (!content) return "";
-  if ("content" in content && Array.isArray(content.content) && content.content.length === 0) return "";
-  return editorInstance.markdown.serialize(content);
 }
 
 export function Editor({ value, onChange, readOnly = false }: Props) {
@@ -134,68 +124,19 @@ export function Editor({ value, onChange, readOnly = false }: Props) {
             }
             return false;
           },
-          copy: (_view, event) => {
-            const editorInstance = editorRef.current;
-            if (!editorInstance) return false;
-            const clipboardData = event.clipboardData;
-            if (!clipboardData) return false;
-            const view = editorInstance.view;
-            if (!view) return false;
-            const selection = view.state.selection;
-            if (selection.empty) return false;
-            const { dom } = view.serializeForClipboard(selection.content());
-            const html = dom?.innerHTML ?? "";
-            const markdown = getSelectionMarkdown(editorInstance);
-            if (!markdown && !html) return false;
-            event.preventDefault();
-            clipboardData.clearData?.();
-            if (html) clipboardData.setData("text/html", html);
-            if (markdown) clipboardData.setData("text/plain", markdown);
-            console.debug("tiptap:copy-markdown", { length: markdown.length, html: html.length });
-            return true;
-          },
-          cut: (_view, event) => {
-            if (readOnlyRef.current) return false;
-            const editorInstance = editorRef.current;
-            if (!editorInstance) return false;
-            const clipboardData = event.clipboardData;
-            if (!clipboardData) return false;
-            const view = editorInstance.view;
-            if (!view) return false;
-            const selection = view.state.selection;
-            if (selection.empty) return false;
-            const { dom } = view.serializeForClipboard(selection.content());
-            const html = dom?.innerHTML ?? "";
-            const markdown = getSelectionMarkdown(editorInstance);
-            if (!markdown && !html) return false;
-            event.preventDefault();
-            clipboardData.clearData?.();
-            if (html) clipboardData.setData("text/html", html);
-            if (markdown) clipboardData.setData("text/plain", markdown);
-            console.debug("tiptap:cut-markdown", { length: markdown.length, html: html.length });
-            editorInstance.commands.deleteSelection();
-            return true;
-          },
           paste: (_view, event) => {
             if (readOnlyRef.current) return false;
             const editorInstance = editorRef.current;
             if (!editorInstance) return false;
+            if (!editorInstance.markdown) return false;
             const clipboardData = event.clipboardData;
             if (!clipboardData) return false;
-            const html = clipboardData.getData("text/html");
-            if (html) {
-              event.preventDefault();
-              console.debug("tiptap:paste-html", { length: html.length });
-              editorInstance.commands.insertContent(html);
-              return true;
-            }
-            if (!editorInstance.markdown) return false;
-            const text = clipboardData.getData("text/plain");
+            if (!shouldHandleMarkdownPaste(clipboardData)) return false;
+            const text = getMarkdownFromClipboard(clipboardData);
             if (!text) return false;
             event.preventDefault();
             const parsed = editorInstance.markdown.parse(text);
             const content = Array.isArray(parsed.content) ? parsed.content : [];
-            console.debug("tiptap:paste-markdown", { length: text.length, nodes: content.length });
             editorInstance.commands.insertContent(content);
             return true;
           },

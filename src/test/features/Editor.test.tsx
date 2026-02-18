@@ -353,9 +353,8 @@ describe("Editor", () => {
     await unmount();
   });
 
-  it("copies selection as markdown", async () => {
+  it("delegates copy and cut to native editor behavior", async () => {
     const onChange = vi.fn();
-    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
 
     const { unmount } = await render(
       React.createElement((await import("@/features/editor/Editor")).Editor, {
@@ -364,39 +363,14 @@ describe("Editor", () => {
       }),
     );
 
-    const clipboardData = {
-      clearData: vi.fn(),
-      setData: vi.fn(),
-    };
-    const event = {
-      clipboardData,
-      preventDefault: vi.fn(),
-    };
+    expect(lastConfig.editorProps.handleDOMEvents.copy).toBeUndefined();
+    expect(lastConfig.editorProps.handleDOMEvents.cut).toBeUndefined();
 
-    const handled = lastConfig.editorProps.handleDOMEvents.copy({}, event);
-
-    expect(handled).toBe(true);
-    expect(event.preventDefault).toHaveBeenCalled();
-    expect(editorMock.markdown.serialize).toHaveBeenCalledWith({
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          content: [{ type: "text", text: "Copy me" }],
-        },
-      ],
-    });
-    expect(editorMock.view.serializeForClipboard).toHaveBeenCalledWith("slice");
-    expect(clipboardData.setData).toHaveBeenCalledWith("text/html", "<h2>Copy me</h2>");
-    expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", "Copy **me**");
-
-    debugSpy.mockRestore();
     await unmount();
   });
 
-  it("cuts selection as markdown", async () => {
+  it("delegates plain/html paste to native behavior", async () => {
     const onChange = vi.fn();
-    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
 
     const { unmount } = await render(
       React.createElement((await import("@/features/editor/Editor")).Editor, {
@@ -406,40 +380,11 @@ describe("Editor", () => {
     );
 
     const clipboardData = {
-      clearData: vi.fn(),
-      setData: vi.fn(),
-    };
-    const event = {
-      clipboardData,
-      preventDefault: vi.fn(),
-    };
-
-    const handled = lastConfig.editorProps.handleDOMEvents.cut({}, event);
-
-    expect(handled).toBe(true);
-    expect(event.preventDefault).toHaveBeenCalled();
-    expect(editorMock.view.serializeForClipboard).toHaveBeenCalledWith("slice");
-    expect(clipboardData.setData).toHaveBeenCalledWith("text/html", "<h2>Copy me</h2>");
-    expect(clipboardData.setData).toHaveBeenCalledWith("text/plain", "Copy **me**");
-    expect(editorMock.commands.deleteSelection).toHaveBeenCalled();
-
-    debugSpy.mockRestore();
-    await unmount();
-  });
-
-  it("pastes html before markdown", async () => {
-    const onChange = vi.fn();
-    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
-
-    const { unmount } = await render(
-      React.createElement((await import("@/features/editor/Editor")).Editor, {
-        value: "hello",
-        onChange,
-      }),
-    );
-
-    const clipboardData = {
-      getData: (type: string) => (type === "text/html" ? "<p><strong>Title</strong></p>" : "Title"),
+      getData: (type: string) => {
+        if (type === "text/html") return "<p><strong>Title</strong></p>";
+        if (type === "text/plain") return "# Title\n\n- item";
+        return "";
+      },
     };
     const event = {
       clipboardData,
@@ -448,18 +393,16 @@ describe("Editor", () => {
 
     const handled = lastConfig.editorProps.handleDOMEvents.paste({}, event);
 
-    expect(handled).toBe(true);
-    expect(event.preventDefault).toHaveBeenCalled();
-    expect(editorMock.commands.insertContent).toHaveBeenCalledWith("<p><strong>Title</strong></p>");
+    expect(handled).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
     expect(editorMock.markdown.parse).not.toHaveBeenCalled();
+    expect(editorMock.commands.insertContent).not.toHaveBeenCalled();
 
-    debugSpy.mockRestore();
     await unmount();
   });
 
-  it("pastes markdown as parsed content", async () => {
+  it("pastes explicit markdown mime content as parsed content", async () => {
     const onChange = vi.fn();
-    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
 
     const { unmount } = await render(
       React.createElement((await import("@/features/editor/Editor")).Editor, {
@@ -469,7 +412,7 @@ describe("Editor", () => {
     );
 
     const clipboardData = {
-      getData: (type: string) => (type === "text/plain" ? "# Title\n\n- item" : ""),
+      getData: (type: string) => (type === "text/markdown" ? "# Title\n\n- item" : ""),
     };
     const event = {
       clipboardData,
@@ -488,7 +431,34 @@ describe("Editor", () => {
       },
     ]);
 
-    debugSpy.mockRestore();
+    await unmount();
+  });
+
+  it("skips custom markdown paste while read-only", async () => {
+    const onChange = vi.fn();
+
+    const { unmount } = await render(
+      React.createElement((await import("@/features/editor/Editor")).Editor, {
+        value: "hello",
+        onChange,
+        readOnly: true,
+      }),
+    );
+
+    const clipboardData = {
+      getData: (type: string) => (type === "text/markdown" ? "# Title\n\n- item" : ""),
+    };
+    const event = {
+      clipboardData,
+      preventDefault: vi.fn(),
+    };
+
+    const handled = lastConfig.editorProps.handleDOMEvents.paste({}, event);
+
+    expect(handled).toBe(false);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(editorMock.markdown.parse).not.toHaveBeenCalled();
+
     await unmount();
   });
 });
