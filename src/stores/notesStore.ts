@@ -1,6 +1,31 @@
 import { create } from "zustand";
 import { api } from "@/lib/api";
 import type { NoteMeta, NotesList } from "@/lib/types";
+import {
+  bumpLastInteraction,
+  findMetaById,
+  getSectionIds,
+  listIds,
+  pruneByIds,
+  removeMeta,
+  replaceOrAppendActive,
+  sortActive,
+  sortTrashed,
+  upsertMeta,
+  type ReorderSection,
+} from "@/stores/notes/helpers";
+import {
+  popReorderRedo,
+  popReorderUndo,
+  pushReorderRedo,
+  pushReorderUndo,
+  pushUndoFromRedo,
+} from "@/stores/notes/reorderHistory";
+import {
+  clearDraftSaveTimer,
+  scheduleAppStateWrite,
+  scheduleDraftSave,
+} from "@/stores/notes/persistenceTimers";
 
 type ViewMode = "notes" | "trash";
 
@@ -28,7 +53,7 @@ type NotesState = {
   deleteForever: (id: string) => Promise<void>;
   clearTrash: () => Promise<void>;
   togglePin: (id: string) => Promise<void>;
-  reorder: (section: "pinned" | "notes", ids: string[]) => Promise<void>;
+  reorder: (section: ReorderSection, ids: string[]) => Promise<void>;
   undoReorder: () => Promise<void>;
   redoReorder: () => Promise<void>;
   heartbeatSelected: () => Promise<void>;
@@ -68,67 +93,9 @@ const DEFAULT_STATE: Omit<
   loading: false,
 };
 
-function upsertMeta(list: NotesList, meta: NoteMeta): NotesList {
-  const target = meta.isTrashed ? "trashed" : "active";
-  const other = target === "active" ? "trashed" : "active";
-
-  const nextTarget = list[target].some((n) => n.id === meta.id)
-    ? list[target].map((n) => (n.id === meta.id ? meta : n))
-    : [...list[target], meta];
-
-  const nextOther = list[other].filter((n) => n.id !== meta.id);
-
-  return target === "active"
-    ? { active: nextTarget, trashed: nextOther }
-    : { active: nextOther, trashed: nextTarget };
-}
-
-function removeMeta(list: NotesList, id: string): NotesList {
-  return {
-    active: list.active.filter((n) => n.id !== id),
-    trashed: list.trashed.filter((n) => n.id !== id),
-  };
-}
-
-function replaceOrAppendActive(list: NotesList, meta: NoteMeta): NotesList {
-  const without = list.active.filter((n) => n.id !== meta.id);
-  return { ...list, active: [...without, meta] };
-}
-
-const draftSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
-let appStateTimer: ReturnType<typeof setTimeout> | null = null;
-const reorderUndoStack: Array<{ section: "pinned" | "notes"; ids: string[] }> = [];
-const reorderRedoStack: Array<{ section: "pinned" | "notes"; ids: string[] }> = [];
-
-function clearDraftSaveTimer(id: string) {
-  const timer = draftSaveTimers.get(id);
-  if (timer) clearTimeout(timer);
-  draftSaveTimers.delete(id);
-}
-
-function scheduleAppStateWrite(getState: () => NotesState) {
-  if (appStateTimer) clearTimeout(appStateTimer);
-  appStateTimer = setTimeout(async () => {
-    try {
-      const s = getState();
-      await api.appStateSet("sidebarWidth", String(s.sidebarWidth));
-      if (s.selectedId) await api.appStateSet("selectedNoteId", s.selectedId);
-      await api.appStateSet("viewMode", s.viewMode);
-    } catch (err) {
-      console.error("App state write failed:", err);
-    }
-  }, 250);
-}
-
-function getSectionIds(s: NotesState, section: "pinned" | "notes") {
-  return s.list.active
-    .filter((n) => (section === "pinned" ? n.isPinned : !n.isPinned))
-    .map((n) => n.id);
-}
-
 function applyReorderState(
   setState: (fn: (s: NotesState) => NotesState) => void,
-  section: "pinned" | "notes",
+  section: ReorderSection,
   ids: string[],
 ) {
   setState((s) => {
@@ -155,56 +122,13 @@ function applyReorderState(
   });
 }
 
-function pushUndo(section: "pinned" | "notes", ids: string[]) {
-  reorderUndoStack.push({ section, ids });
-  if (reorderUndoStack.length > 20) reorderUndoStack.shift();
-  reorderRedoStack.length = 0;
-}
-
-function listIds(list: NotesList) {
-  return new Set([...list.active, ...list.trashed].map((note) => note.id));
-}
-
-function pruneByIds<T>(map: Record<string, T>, ids: Set<string>) {
-  const next: Record<string, T> = {};
-  for (const [key, value] of Object.entries(map)) {
-    if (ids.has(key)) next[key] = value;
-  }
-  return next;
-}
-
-function sortActive(notes: NoteMeta[]) {
-  return [...notes].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-    return a.sortOrder - b.sortOrder;
-  });
-}
-
-function sortTrashed(notes: NoteMeta[]) {
-  return [...notes].sort((a, b) => {
-    const aTrashed = a.trashedAt ?? 0;
-    const bTrashed = b.trashedAt ?? 0;
-    if (aTrashed !== bTrashed) return bTrashed - aTrashed;
-    return a.sortOrder - b.sortOrder;
-  });
-}
-
-function findMetaById(list: NotesList, id: string | null) {
-  if (!id) return null;
-  return list.active.find((n) => n.id === id) ?? list.trashed.find((n) => n.id === id) ?? null;
-}
-
-function bumpLastInteraction(list: NotesList, id: string, now: number): NotesList {
-  let changed = false;
-  const update = (note: NoteMeta) => {
-    if (note.id !== id) return note;
-    if (note.lastInteraction === now) return note;
-    changed = true;
-    return { ...note, lastInteraction: now };
+function appStateSnapshot(getState: () => NotesState) {
+  const state = getState();
+  return {
+    sidebarWidth: state.sidebarWidth,
+    selectedId: state.selectedId,
+    viewMode: state.viewMode,
   };
-  const active = list.active.map(update);
-  const trashed = list.trashed.map(update);
-  return changed ? { active, trashed } : list;
 }
 
 export const useNotesStore = create<NotesState>((set, get) => ({
@@ -254,7 +178,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       contentById: { ...s.contentById, [meta.id]: "" },
     }));
 
-    scheduleAppStateWrite(get);
+    scheduleAppStateWrite(() => appStateSnapshot(get));
     await api.noteSetActive(meta.id);
 
     // Focus the editor after creating a new note
@@ -283,7 +207,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
         viewMode: shouldOpenTrash ? "trash" : s.viewMode,
       };
     });
-    scheduleAppStateWrite(get);
+    scheduleAppStateWrite(() => appStateSnapshot(get));
 
     if (shouldBumpPrev && prevId) {
       await api.noteSetActive(prevId);
@@ -313,12 +237,12 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   },
   setViewMode: (viewMode) => {
     set((s) => ({ ...s, viewMode }));
-    scheduleAppStateWrite(get);
+    scheduleAppStateWrite(() => appStateSnapshot(get));
   },
   setSidebarWidth: (sidebarWidth) => {
     const clamped = Math.max(200, Math.min(400, sidebarWidth));
     set((s) => ({ ...s, sidebarWidth: clamped }));
-    scheduleAppStateWrite(get);
+    scheduleAppStateWrite(() => appStateSnapshot(get));
   },
   updateContent: (id, content) => {
     const state = get();
@@ -338,17 +262,14 @@ export const useNotesStore = create<NotesState>((set, get) => ({
 
     if (meta.storage !== "draft" || meta.isTrashed) return;
 
-    clearDraftSaveTimer(id);
-    const timer = setTimeout(async () => {
-      draftSaveTimers.delete(id);
+    scheduleDraftSave(id, async () => {
       try {
         const updated = await api.noteWriteDraft(id, content);
         set((s) => ({ ...s, list: upsertMeta(s.list, updated) }));
       } catch (err) {
         console.error(`Draft auto-save failed for ${id}:`, err);
       }
-    }, 500);
-    draftSaveTimers.set(id, timer);
+    });
   },
   save: async (id) => {
     const s = get();
@@ -408,7 +329,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       contentById: { ...s.contentById, [note.meta.id]: note.content },
     }));
 
-    scheduleAppStateWrite(get);
+    scheduleAppStateWrite(() => appStateSnapshot(get));
     await api.noteSetActive(note.meta.id);
   },
   trash: async (id) => {
@@ -486,32 +407,30 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     set((st) => ({ ...st, list: upsertMeta(st.list, updated) }));
   },
   reorder: async (section, ids) => {
-    const prev = getSectionIds(get(), section);
-    pushUndo(section, prev);
+    const prev = getSectionIds(get().list, section);
+    pushReorderUndo(section, prev);
     applyReorderState(set, section, ids);
 
     await api.notesReorder(ids);
     await get().refresh();
   },
   undoReorder: async () => {
-    const entry = reorderUndoStack.pop();
+    const entry = popReorderUndo();
     if (!entry) return;
 
-    const current = getSectionIds(get(), entry.section);
-    reorderRedoStack.push({ section: entry.section, ids: current });
-    if (reorderRedoStack.length > 20) reorderRedoStack.shift();
+    const current = getSectionIds(get().list, entry.section);
+    pushReorderRedo(entry.section, current);
 
     applyReorderState(set, entry.section, entry.ids);
     await api.notesReorder(entry.ids);
     await get().refresh();
   },
   redoReorder: async () => {
-    const entry = reorderRedoStack.pop();
+    const entry = popReorderRedo();
     if (!entry) return;
 
-    const current = getSectionIds(get(), entry.section);
-    reorderUndoStack.push({ section: entry.section, ids: current });
-    if (reorderUndoStack.length > 20) reorderUndoStack.shift();
+    const current = getSectionIds(get().list, entry.section);
+    pushUndoFromRedo(entry.section, current);
 
     applyReorderState(set, entry.section, entry.ids);
     await api.notesReorder(entry.ids);
