@@ -18,8 +18,22 @@ vi.mock("@/components/ui/select", () => ({
 }));
 
 vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children }: any) => <div>{children}</div>,
-  DialogContent: ({ children }: any) => <div>{children}</div>,
+  Dialog: ({ children, onOpenChange }: any) => (
+    <div>
+      <button type="button" onClick={() => onOpenChange?.(false)}>
+        close-dialog
+      </button>
+      {children}
+    </div>
+  ),
+  DialogContent: ({ children, onInteractOutside }: any) => (
+    <div>
+      <button type="button" onClick={() => onInteractOutside?.()}>
+        outside
+      </button>
+      {children}
+    </div>
+  ),
   DialogDescription: ({ children }: any) => <p>{children}</p>,
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <h2>{children}</h2>,
@@ -53,7 +67,7 @@ describe("SettingsDialog", () => {
       theme: "dark",
     };
 
-    const { unmount } = await render(
+    const { container, unmount } = await render(
       React.createElement((await import("@/features/settings/SettingsDialog")).SettingsDialog, {
         settings,
         onClose,
@@ -74,6 +88,18 @@ describe("SettingsDialog", () => {
 
     tabsHandlers[0]?.("light");
     expect(onTheme).toHaveBeenCalledWith("light");
+
+    const checkUpdatesButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Check for updates"),
+    );
+    checkUpdatesButton?.click();
+    expect(onCheckUpdates).toHaveBeenCalled();
+
+    const closeButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("close-dialog"),
+    );
+    closeButton?.click();
+    expect(onClose).toHaveBeenCalled();
 
     await unmount();
   });

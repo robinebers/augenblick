@@ -100,12 +100,32 @@ describe("CommandPalette", () => {
     expect(onNewNote).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
 
+    const pinToggle = container.querySelector('button[data-value="pin-current"]') as HTMLButtonElement;
+    pinToggle.click();
+    expect(onTogglePinCurrent).toHaveBeenCalled();
+
+    const save = container.querySelector('button[data-value="save"]') as HTMLButtonElement;
+    save.click();
+    expect(onSave).toHaveBeenCalled();
+
+    const saveAs = container.querySelector('button[data-value="save-as"]') as HTMLButtonElement;
+    saveAs.click();
+    expect(onSaveAs).toHaveBeenCalled();
+
+    const open = container.querySelector('button[data-value="open"]') as HTMLButtonElement;
+    open.click();
+    expect(onOpenFile).toHaveBeenCalled();
+
     const noteItem = container.querySelector('button[data-value="n1"]') as HTMLButtonElement;
     noteItem.click();
     expect(onSelectNote).toHaveBeenCalledWith("n1");
 
     expect(container.textContent).toContain("Draft");
     expect(container.textContent).toContain("Saved");
+
+    const trash = container.querySelector('button[data-value="trash"]') as HTMLButtonElement;
+    trash.click();
+    expect(onCloseNote).toHaveBeenCalled();
 
     const settings = container.querySelector('button[data-value="settings"]') as HTMLButtonElement;
     settings.click();
