@@ -3,6 +3,13 @@ use tauri::{AppHandle, Manager};
 use tauri::{PhysicalPosition, PhysicalSize, Position, Size};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MainWindowToggleResult {
+    Shown,
+    Hidden,
+    NoWindow,
+}
+
 fn monitor_bounds(m: &Monitor) -> (i32, i32, i32, i32) {
     let pos = m.position();
     let size = m.size();
@@ -115,6 +122,30 @@ pub fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
 }
 
 #[cfg(target_os = "macos")]
+pub fn toggle_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) -> MainWindowToggleResult {
+    use tauri::ActivationPolicy;
+
+    let Some(window) = app_handle.get_webview_window("main") else {
+        return MainWindowToggleResult::NoWindow;
+    };
+
+    let is_visible = window.is_visible().unwrap_or(true);
+    let is_minimized = window.is_minimized().unwrap_or(false);
+    let is_focused = window.is_focused().unwrap_or(false);
+    if is_visible && !is_minimized && is_focused {
+        let _ = window.hide();
+        let _ = app_handle.set_activation_policy(ActivationPolicy::Accessory);
+        return MainWindowToggleResult::Hidden;
+    }
+
+    if is_minimized {
+        let _ = window.unminimize();
+    }
+    show_main_window(app_handle);
+    MainWindowToggleResult::Shown
+}
+
+#[cfg(target_os = "macos")]
 pub fn show_main_window_if_hidden<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
     let Some(window) = app_handle.get_webview_window("main") else {
         return;
@@ -140,4 +171,25 @@ pub fn show_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn toggle_main_window<R: tauri::Runtime>(app_handle: &AppHandle<R>) -> MainWindowToggleResult {
+    let Some(window) = app_handle.get_webview_window("main") else {
+        return MainWindowToggleResult::NoWindow;
+    };
+
+    let is_visible = window.is_visible().unwrap_or(true);
+    let is_minimized = window.is_minimized().unwrap_or(false);
+    let is_focused = window.is_focused().unwrap_or(false);
+    if is_visible && !is_minimized && is_focused {
+        let _ = window.hide();
+        return MainWindowToggleResult::Hidden;
+    }
+
+    if is_minimized {
+        let _ = window.unminimize();
+    }
+    show_main_window(app_handle);
+    MainWindowToggleResult::Shown
 }

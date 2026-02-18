@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NoteMeta } from "@/lib/types";
+import { getDirtySavedMap } from "@/stores/notes/dirty";
 
 const apiMock = {
   notesList: vi.fn(),
@@ -115,15 +116,15 @@ describe("notesStore", () => {
     await useNotesStore.getState().init();
 
     useNotesStore.getState().updateContent("n1", "changed");
-    expect(useNotesStore.getState().dirtySavedById).toEqual({ n1: true });
+    expect(getDirtySavedMap(useNotesStore.getState())).toEqual({ n1: true });
 
     await useNotesStore.getState().runExpirySweep();
 
     expect(useNotesStore.getState().contentById.n1).toBeUndefined();
-    expect(useNotesStore.getState().dirtySavedById).toEqual({});
+    expect(getDirtySavedMap(useNotesStore.getState())).toEqual({});
   });
 
-  it("keeps dirty flags when notes expire into trash", async () => {
+  it("treats expired-to-trash notes as clean in saved-note dirty map", async () => {
     const n1 = meta({ id: "n1", storage: "saved", sortOrder: 1 });
     const trashed = meta({ id: "n1", storage: "saved", isTrashed: true, trashedAt: 2 });
 
@@ -134,12 +135,12 @@ describe("notesStore", () => {
       ...s,
       list: { active: [n1], trashed: [] },
       contentById: { n1: "draft" },
-      dirtySavedById: { n1: true },
+      lastSavedContentById: { n1: "saved" },
     }));
 
     await useNotesStore.getState().runExpirySweep();
 
-    expect(useNotesStore.getState().dirtySavedById).toEqual({ n1: true });
+    expect(getDirtySavedMap(useNotesStore.getState())).toEqual({});
   });
 
   it("keeps locally created notes when expiry list is stale", async () => {
@@ -303,12 +304,26 @@ describe("notesStore", () => {
     await useNotesStore.getState().init();
 
     useNotesStore.getState().updateContent("s1", "new");
-    expect(useNotesStore.getState().dirtySavedById).toEqual({ s1: true });
+    expect(getDirtySavedMap(useNotesStore.getState())).toEqual({ s1: true });
     expect(apiMock.noteWriteDraft).not.toHaveBeenCalled();
 
     await useNotesStore.getState().save("s1");
     expect(apiMock.noteSave).toHaveBeenCalledWith("s1", "new");
-    expect(useNotesStore.getState().dirtySavedById).toEqual({});
+    expect(getDirtySavedMap(useNotesStore.getState())).toEqual({});
+  });
+
+  it("does not mark saved note dirty when content is unchanged", async () => {
+    const saved = meta({ id: "s1", storage: "saved" });
+
+    apiMock.notesList.mockResolvedValue({ active: [saved], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({ selectedNoteId: "s1" });
+    apiMock.noteGet.mockResolvedValue({ meta: saved, content: "hi" });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+
+    useNotesStore.getState().updateContent("s1", "hi");
+    expect(getDirtySavedMap(useNotesStore.getState())).toEqual({});
   });
 
   it("saves all dirty notes", async () => {
@@ -329,7 +344,7 @@ describe("notesStore", () => {
     await useNotesStore.getState().saveAllDirty();
     expect(apiMock.noteSave).toHaveBeenCalledWith("s1", "one*");
     expect(apiMock.noteSave).toHaveBeenCalledWith("s2", "two*");
-    expect(useNotesStore.getState().dirtySavedById).toEqual({});
+    expect(getDirtySavedMap(useNotesStore.getState())).toEqual({});
   });
 
   it("selects trashed notes and switches view mode", async () => {
@@ -404,6 +419,26 @@ describe("notesStore", () => {
     expect(useNotesStore.getState().selectedId).toBe("i1");
     expect(useNotesStore.getState().contentById.i1).toBe("hello");
     expect(apiMock.noteSetActive).toHaveBeenCalledWith("i1");
+  });
+
+  it("clears stale dirty flag when re-importing an existing note", async () => {
+    const existing = meta({ id: "i1", storage: "saved" });
+    const imported = meta({ id: "i1", storage: "saved", title: "Imported" });
+    apiMock.notesList.mockResolvedValue({ active: [existing], trashed: [] });
+    apiMock.appStateGetAll.mockResolvedValue({});
+    apiMock.noteImportFile.mockResolvedValue({ meta: imported, content: "disk content" });
+
+    const { useNotesStore } = await import("@/stores/notesStore");
+    await useNotesStore.getState().init();
+    useNotesStore.setState((s: any) => ({
+      ...s,
+      contentById: { ...s.contentById, i1: "stale local" },
+      lastSavedContentById: { ...s.lastSavedContentById, i1: "clean snapshot" },
+    }));
+
+    await useNotesStore.getState().importFile("/tmp/existing.md");
+    expect(getDirtySavedMap(useNotesStore.getState())).toEqual({});
+    expect(useNotesStore.getState().contentById.i1).toBe("disk content");
   });
 
   it("trashes, restores, deletes and clears trash", async () => {

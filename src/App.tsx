@@ -1,12 +1,13 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useMemo, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
 import { AppShell } from "@/app/AppShell";
 import { ErrorBoundary } from "@/app/ErrorBoundary";
+import { useAppBootstrap } from "@/app/hooks/useAppBootstrap";
+import { useExpiryScheduler } from "@/app/hooks/useExpiryScheduler";
+import { useUpdater } from "@/app/hooks/useUpdater";
+import { useWindowAndMenuEvents } from "@/app/hooks/useWindowAndMenuEvents";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -22,12 +23,11 @@ import { Sidebar } from "@/features/sidebar/Sidebar";
 import { CommandPalette } from "@/features/command/CommandPalette";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { createPageActions } from "@/routes/pageActions";
-import { createPageKeydownHandler } from "@/routes/pageHotkeys";
 import { openDialog, confirmDialog } from "@/stores/dialogStore";
+import { getDirtySavedCount, getDirtySavedMap, isNoteDirty } from "@/stores/notes/dirty";
 import { useNotesStore } from "@/stores/notesStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { api } from "@/lib/api";
-import { noteExpiryTime } from "@/lib/utils/expiry";
 
 const LazyEditor = lazy(() =>
   import("@/features/editor/Editor").then((mod) => ({ default: mod.Editor })),
@@ -39,17 +39,18 @@ const LazyTrashPreview = lazy(() =>
 function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
-
-  const updateCheckInFlightRef = useRef(false);
-  const updateCheckTimeoutIdRef = useRef<number | null>(null);
+  const {
+    isCheckingUpdates,
+    handleCheckUpdates,
+    scheduleLaunchUpdateCheck,
+  } = useUpdater();
 
   const list = useNotesStore((s) => s.list);
   const selectedId = useNotesStore((s) => s.selectedId);
   const viewMode = useNotesStore((s) => s.viewMode);
   const sidebarWidth = useNotesStore((s) => s.sidebarWidth);
   const contentById = useNotesStore((s) => s.contentById);
-  const dirtySavedById = useNotesStore((s) => s.dirtySavedById);
+  const lastSavedContentById = useNotesStore((s) => s.lastSavedContentById);
 
   const expiryMinutes = useSettingsStore((s) => s.expiryMinutes);
   const trashRetentionDays = useSettingsStore((s) => s.trashRetentionDays);
@@ -58,6 +59,10 @@ function App() {
   const pinned = useMemo(() => list.active.filter((n) => n.isPinned), [list.active]);
   const notes = useMemo(() => list.active.filter((n) => !n.isPinned), [list.active]);
   const trashed = useMemo(() => list.trashed, [list.trashed]);
+  const dirtySavedById = useMemo(
+    () => getDirtySavedMap({ list, contentById, lastSavedContentById }),
+    [contentById, lastSavedContentById, list],
+  );
 
   const selectedMeta = useMemo(() => {
     if (!selectedId) return null;
@@ -101,62 +106,6 @@ function App() {
     }
   }, []);
 
-  const hasCheckedOnLaunchRef = useRef(false);
-
-  const checkForUpdates = useCallback(async (options: { silent?: boolean } = {}) => {
-    if (updateCheckInFlightRef.current) return;
-
-    updateCheckInFlightRef.current = true;
-    setIsCheckingUpdates(true);
-
-    try {
-      const update = await check();
-      if (!update) {
-        if (!options.silent) {
-          toast.success("You're up to date!", {
-            description: "You're running the latest version of Augenblick.",
-          });
-        }
-        return;
-      }
-
-      // Download and install immediately (silently)
-      await update.downloadAndInstall();
-
-      // Show toast with Restart button
-      toast.success("New update available", {
-        description: "Restart to use the latest",
-        action: {
-          label: "Restart",
-          onClick: () => {
-            relaunch().catch((err) => {
-              toast.error("Restart failed", {
-                description: "Please restart the app manually to apply the update.",
-              });
-              console.error("Relaunch failed:", err);
-            });
-          },
-        },
-        duration: Infinity,
-      });
-    } catch (err) {
-      if (!options.silent) {
-        toast.error("Update failed", { description: String(err) });
-      }
-    } finally {
-      updateCheckInFlightRef.current = false;
-      setIsCheckingUpdates(false);
-    }
-  }, []);
-
-  const handleCheckUpdates = useCallback(() => {
-    if (updateCheckTimeoutIdRef.current != null) {
-      window.clearTimeout(updateCheckTimeoutIdRef.current);
-      updateCheckTimeoutIdRef.current = null;
-    }
-    void checkForUpdates({ silent: false });
-  }, [checkForUpdates]);
-
   const actions = useMemo(() => {
     const notesStore = useNotesStore.getState();
     return createPageActions({
@@ -188,7 +137,7 @@ function App() {
         const s = useNotesStore.getState();
         return s.list.active.find((n) => n.id === id) ?? s.list.trashed.find((n) => n.id === id) ?? null;
       },
-      isDirtySaved: (id) => Boolean(useNotesStore.getState().dirtySavedById[id]),
+      isDirtySaved: (id) => isNoteDirty(useNotesStore.getState(), id),
       getSidebarWidth: () => useNotesStore.getState().sidebarWidth,
       setSidebarWidth: (width) => useNotesStore.getState().setSidebarWidth(width),
       getTrashedCount: () => useNotesStore.getState().list.trashed.length,
@@ -196,7 +145,7 @@ function App() {
   }, []);
 
   const confirmUnsaved = useCallback(async (title: string) => {
-    const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
+    const dirtyCount = getDirtySavedCount(useNotesStore.getState());
     if (dirtyCount === 0) return true;
 
     const choice = await openDialog({
@@ -216,7 +165,7 @@ function App() {
   }, []);
 
   const requestQuit = useCallback(async () => {
-    const dirtyCount = Object.keys(useNotesStore.getState().dirtySavedById).length;
+    const dirtyCount = getDirtySavedCount(useNotesStore.getState());
     if (dirtyCount === 0) {
       await api.appExit();
       return;
@@ -228,192 +177,33 @@ function App() {
     await api.appExit();
   }, [confirmUnsaved]);
 
-  useEffect(() => {
-    let nextExpiryAt: number | null = null;
-
-    for (const note of list.active) {
-      if (note.isPinned) continue;
-      const noteExpiry = noteExpiryTime(note.lastInteraction, expiryMinutes);
-      if (nextExpiryAt === null || noteExpiry < nextExpiryAt) nextExpiryAt = noteExpiry;
-    }
-
-    if (nextExpiryAt === null) return;
-
-    const delay = Math.max(0, nextExpiryAt - Date.now());
-    const timer = window.setTimeout(() => {
-      void runOrAlert(() => useNotesStore.getState().runExpirySweep());
-    }, delay);
-
-    return () => window.clearTimeout(timer);
-  }, [expiryMinutes, list.active, runOrAlert]);
-
-  useEffect(() => {
-    let disposed = false;
-    const unlisteners: Array<() => void> = [];
-    const registerUnlisten = (unlisten: (() => void) | null | undefined) => {
-      if (!unlisten) return;
-      if (disposed) {
-        unlisten();
-        return;
-      }
-      unlisteners.push(unlisten);
-    };
-
-    void runOrAlert(async () => {
-      await syncMacActivationPolicy();
-      if (disposed) return;
-      await useSettingsStore.getState().init();
-      if (disposed) return;
-      await useNotesStore.getState().init();
-      if (disposed) return;
-
-      // Check for updates on launch (silent - only shows toast if update ready)
-      if (!hasCheckedOnLaunchRef.current) {
-        hasCheckedOnLaunchRef.current = true;
-        updateCheckTimeoutIdRef.current = window.setTimeout(() => {
-          updateCheckTimeoutIdRef.current = null;
-          void checkForUpdates({ silent: true });
-        }, 2000);
-      }
-
-      if (disposed) return;
-      registerUnlisten(await listen("menu-open-markdown", () => {
-        void runOrAlert(() => actions.openMarkdown());
-      }));
-      if (disposed) return;
-      registerUnlisten(await listen("menu-new-note", () => {
-        void runOrAlert(() => useNotesStore.getState().createNote());
-      }));
-      if (disposed) return;
-      registerUnlisten(await listen("menu-save", () => {
-        void runOrAlert(() => actions.saveCurrent());
-      }));
-      if (disposed) return;
-      registerUnlisten(await listen("menu-save-as", () => {
-        void runOrAlert(() => actions.saveAs());
-      }));
-      if (disposed) return;
-      registerUnlisten(await listen("menu-trash", () => {
-        void runOrAlert(() => actions.closeCurrent());
-      }));
-      if (disposed) return;
-      registerUnlisten(await listen("menu-settings", () => {
-        setShowSettings(true);
-      }));
-
-      if (disposed) return;
-      registerUnlisten(await listen("menu-quit", () => {
-        void runOrAlert(requestQuit);
-      }));
-
-      // Tray event handlers - window is already shown by Rust before these events are emitted
-      if (disposed) return;
-      registerUnlisten(await listen("tray-new-note", () => {
-        void runOrAlert(() => useNotesStore.getState().createNote());
-      }));
-
-      if (disposed) return;
-      registerUnlisten(await listen("tray-show-all", () => {
-        useNotesStore.getState().setViewMode("notes");
-      }));
-
-      if (disposed) return;
-      registerUnlisten(await listen<string>("tray-select-note", (event) => {
-        const id = event.payload;
-        if (!id) return;
-        void runOrAlert(() => useNotesStore.getState().select(id));
-      }));
-
-      if (disposed) return;
-      registerUnlisten(await listen("tray-quit", () => {
-        void runOrAlert(requestQuit);
-      }));
-
-      if (disposed) return;
-      registerUnlisten(await getCurrentWindow().onCloseRequested(async (event) => {
-        event.preventDefault();
-        await getCurrentWindow().hide();
-        await runOrAlert(() => syncMacActivationPolicy(false));
-      }));
-    });
-
-    const heartbeat = window.setInterval(() => {
-      void useNotesStore.getState().heartbeatSelected();
-    }, 30_000);
-
-    const onKeyDown = createPageKeydownHandler({
-      getNotesSnapshot: () => {
-        const s = useNotesStore.getState();
-        return {
-          list: {
-            active: s.list.active.map((n) => ({ id: n.id, isPinned: n.isPinned })),
-            trashed: s.list.trashed.map((n) => ({ id: n.id })),
-          },
-          selectedId: s.selectedId,
-          viewMode: s.viewMode,
-        };
-      },
-      getSelectedId: () => useNotesStore.getState().selectedId,
-      toggleCommandPalette: () => setShowCommandPalette((prev) => !prev),
-      closeCommandPalette: () => setShowCommandPalette(false),
-      openSettings: () => setShowSettings(true),
-      setViewMode: (next) => {
-        void runOrAlert(() => useNotesStore.getState().setViewMode(next));
-      },
-      createNote: () => {
-        void runOrAlert(() => useNotesStore.getState().createNote());
-      },
-      togglePinCurrent: () => {
-        const id = useNotesStore.getState().selectedId;
-        if (id) void runOrAlert(() => useNotesStore.getState().togglePin(id));
-      },
-      closeCurrent: () => {
-        void runOrAlert(() => actions.closeCurrent());
-      },
-      openMarkdown: () => {
-        void runOrAlert(() => actions.openMarkdown());
-      },
-      quit: () => {
-        void runOrAlert(requestQuit);
-      },
-      saveCurrent: () => {
-        void runOrAlert(() => actions.saveCurrent());
-      },
-      saveAs: () => {
-        void runOrAlert(() => actions.saveAs());
-      },
-      selectNote: (id) => {
-        void runOrAlert(() => useNotesStore.getState().select(id));
-      },
-      undoReorder: () => {
-        void runOrAlert(() => useNotesStore.getState().undoReorder());
-      },
-      redoReorder: () => {
-        void runOrAlert(() => useNotesStore.getState().redoReorder());
-      },
-    });
-
-    window.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(heartbeat);
-      window.removeEventListener("keydown", onKeyDown);
-      if (updateCheckTimeoutIdRef.current != null) {
-        window.clearTimeout(updateCheckTimeoutIdRef.current);
-        updateCheckTimeoutIdRef.current = null;
-      }
-      for (const unlisten of unlisteners.splice(0)) {
-        unlisten();
-      }
-    };
-  }, [
-    actions,
-    checkForUpdates,
-    confirmUnsaved,
+  const isBootstrapped = useAppBootstrap({
     runOrAlert,
     syncMacActivationPolicy,
-  ]);
+    scheduleLaunchUpdateCheck,
+  });
+
+  useExpiryScheduler({
+    notes: list.active,
+    expiryMinutes,
+    runExpirySweep: () => useNotesStore.getState().runExpirySweep(),
+    runOrAlert,
+  });
+
+  useWindowAndMenuEvents({
+    enabled: isBootstrapped,
+    actions: {
+      openMarkdown: actions.openMarkdown,
+      saveCurrent: actions.saveCurrent,
+      saveAs: actions.saveAs,
+      closeCurrent: actions.closeCurrent,
+    },
+    runOrAlert,
+    requestQuit,
+    setShowCommandPalette,
+    setShowSettings,
+    syncMacActivationPolicy,
+  });
 
   return (
     <ErrorBoundary>

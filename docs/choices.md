@@ -35,3 +35,10 @@
 ## 2026-01-30
 - macOS app visibility: switch activation policy to `Regular` while the main window is shown (menu + Dock), back to `Accessory` when hidden (tray-only idle).
 - Clipboard copy: serialize selection via `doc.cut(from, to)` to preserve block context (e.g. headings) even for partial selections.
+
+## 2026-02-17
+- Clipboard behavior default: prefer native copy/cut/paste flow; only intercept paste for explicit markdown clipboard MIME (`text/markdown`, `text/x-markdown`).
+- Editor structure: split monolithic editor into `useEditorConfig` + `LinkBubbleMenu` for clearer ownership and easier testing.
+- App structure: split bootstrapping, updater, expiry scheduling, and window/menu event wiring into dedicated app hooks.
+- Store structure: move pure notes transforms/reorder history/timer persistence into `src/stores/notes/*`; keep `notesStore` as orchestration layer.
+- Coverage gate: enforce strict global 90/90/90/90 thresholds; exclude integration-heavy entry/orchestration wrappers (`src/App.tsx`, `src/app/**`, `src/stores/notesStore.ts`, `src/lib/tauri/shim.ts`, `src/features/editor/useEditorConfig.ts`) and keep strictness on the extracted, testable logic modules.

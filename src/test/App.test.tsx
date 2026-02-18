@@ -11,17 +11,25 @@ let lastRestartAction: (() => void) | null = null;
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
+const apiMock = {
+  appSetActivationPolicy: vi.fn(async () => {}),
+  appShowMainWindow: vi.fn(async () => {}),
+  appExit: vi.fn(async () => {}),
+};
 
 vi.mock("@tauri-apps/plugin-updater", () => ({ check }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch }));
+vi.mock("@/lib/api", () => ({ api: apiMock }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(async () => null),
   save: vi.fn(async () => null),
 }));
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
+    isVisible: vi.fn(async () => true),
     onCloseRequested: vi.fn(async () => {}),
     close: vi.fn(async () => {}),
+    hide: vi.fn(async () => {}),
   }),
 }));
 
@@ -61,7 +69,7 @@ const notesState = {
   viewMode: "notes",
   sidebarWidth: 240,
   contentById: {},
-  dirtySavedById: {},
+  lastSavedContentById: {},
   init: vi.fn(async () => {}),
   refresh: vi.fn(async () => {}),
   createNote: vi.fn(async () => {}),

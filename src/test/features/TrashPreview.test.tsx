@@ -3,9 +3,18 @@ import React from "react";
 import { render } from "@/test/utils/render";
 
 vi.mock("@/features/editor/Editor", () => ({
-  Editor: ({ value, readOnly }: { value: string; readOnly?: boolean }) => (
-    <div data-value={value} data-readonly={String(Boolean(readOnly))} />
-  ),
+  Editor: ({
+    value,
+    readOnly,
+    onChange,
+  }: {
+    value: string;
+    readOnly?: boolean;
+    onChange: (next: string) => void;
+  }) => {
+    onChange("ignored");
+    return <div data-value={value} data-readonly={String(Boolean(readOnly))} />;
+  },
 }));
 
 describe("TrashPreview", () => {

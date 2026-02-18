@@ -1,6 +1,32 @@
 import { create } from "zustand";
 import { api } from "@/lib/api";
 import type { NoteMeta, NotesList } from "@/lib/types";
+import {
+  bumpLastInteraction,
+  findMetaById,
+  getSectionIds,
+  listIds,
+  pruneByIds,
+  removeMeta,
+  replaceOrAppendActive,
+  sortActive,
+  sortTrashed,
+  upsertMeta,
+  type ReorderSection,
+} from "@/stores/notes/helpers";
+import { getDirtySavedIds } from "@/stores/notes/dirty";
+import {
+  popReorderRedo,
+  popReorderUndo,
+  pushReorderRedo,
+  pushReorderUndo,
+  pushUndoFromRedo,
+} from "@/stores/notes/reorderHistory";
+import {
+  clearDraftSaveTimer,
+  scheduleAppStateWrite,
+  scheduleDraftSave,
+} from "@/stores/notes/persistenceTimers";
 
 type ViewMode = "notes" | "trash";
 
@@ -10,7 +36,7 @@ type NotesState = {
   viewMode: ViewMode;
   sidebarWidth: number;
   contentById: Record<string, string>;
-  dirtySavedById: Record<string, true>;
+  lastSavedContentById: Record<string, string>;
   loading: boolean;
   init: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -28,7 +54,7 @@ type NotesState = {
   deleteForever: (id: string) => Promise<void>;
   clearTrash: () => Promise<void>;
   togglePin: (id: string) => Promise<void>;
-  reorder: (section: "pinned" | "notes", ids: string[]) => Promise<void>;
+  reorder: (section: ReorderSection, ids: string[]) => Promise<void>;
   undoReorder: () => Promise<void>;
   redoReorder: () => Promise<void>;
   heartbeatSelected: () => Promise<void>;
@@ -64,71 +90,13 @@ const DEFAULT_STATE: Omit<
   viewMode: "notes",
   sidebarWidth: 260,
   contentById: {},
-  dirtySavedById: {},
+  lastSavedContentById: {},
   loading: false,
 };
 
-function upsertMeta(list: NotesList, meta: NoteMeta): NotesList {
-  const target = meta.isTrashed ? "trashed" : "active";
-  const other = target === "active" ? "trashed" : "active";
-
-  const nextTarget = list[target].some((n) => n.id === meta.id)
-    ? list[target].map((n) => (n.id === meta.id ? meta : n))
-    : [...list[target], meta];
-
-  const nextOther = list[other].filter((n) => n.id !== meta.id);
-
-  return target === "active"
-    ? { active: nextTarget, trashed: nextOther }
-    : { active: nextOther, trashed: nextTarget };
-}
-
-function removeMeta(list: NotesList, id: string): NotesList {
-  return {
-    active: list.active.filter((n) => n.id !== id),
-    trashed: list.trashed.filter((n) => n.id !== id),
-  };
-}
-
-function replaceOrAppendActive(list: NotesList, meta: NoteMeta): NotesList {
-  const without = list.active.filter((n) => n.id !== meta.id);
-  return { ...list, active: [...without, meta] };
-}
-
-const draftSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
-let appStateTimer: ReturnType<typeof setTimeout> | null = null;
-const reorderUndoStack: Array<{ section: "pinned" | "notes"; ids: string[] }> = [];
-const reorderRedoStack: Array<{ section: "pinned" | "notes"; ids: string[] }> = [];
-
-function clearDraftSaveTimer(id: string) {
-  const timer = draftSaveTimers.get(id);
-  if (timer) clearTimeout(timer);
-  draftSaveTimers.delete(id);
-}
-
-function scheduleAppStateWrite(getState: () => NotesState) {
-  if (appStateTimer) clearTimeout(appStateTimer);
-  appStateTimer = setTimeout(async () => {
-    try {
-      const s = getState();
-      await api.appStateSet("sidebarWidth", String(s.sidebarWidth));
-      if (s.selectedId) await api.appStateSet("selectedNoteId", s.selectedId);
-      await api.appStateSet("viewMode", s.viewMode);
-    } catch (err) {
-      console.error("App state write failed:", err);
-    }
-  }, 250);
-}
-
-function getSectionIds(s: NotesState, section: "pinned" | "notes") {
-  return s.list.active
-    .filter((n) => (section === "pinned" ? n.isPinned : !n.isPinned))
-    .map((n) => n.id);
-}
-
 function applyReorderState(
   setState: (fn: (s: NotesState) => NotesState) => void,
-  section: "pinned" | "notes",
+  section: ReorderSection,
   ids: string[],
 ) {
   setState((s) => {
@@ -155,56 +123,13 @@ function applyReorderState(
   });
 }
 
-function pushUndo(section: "pinned" | "notes", ids: string[]) {
-  reorderUndoStack.push({ section, ids });
-  if (reorderUndoStack.length > 20) reorderUndoStack.shift();
-  reorderRedoStack.length = 0;
-}
-
-function listIds(list: NotesList) {
-  return new Set([...list.active, ...list.trashed].map((note) => note.id));
-}
-
-function pruneByIds<T>(map: Record<string, T>, ids: Set<string>) {
-  const next: Record<string, T> = {};
-  for (const [key, value] of Object.entries(map)) {
-    if (ids.has(key)) next[key] = value;
-  }
-  return next;
-}
-
-function sortActive(notes: NoteMeta[]) {
-  return [...notes].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-    return a.sortOrder - b.sortOrder;
-  });
-}
-
-function sortTrashed(notes: NoteMeta[]) {
-  return [...notes].sort((a, b) => {
-    const aTrashed = a.trashedAt ?? 0;
-    const bTrashed = b.trashedAt ?? 0;
-    if (aTrashed !== bTrashed) return bTrashed - aTrashed;
-    return a.sortOrder - b.sortOrder;
-  });
-}
-
-function findMetaById(list: NotesList, id: string | null) {
-  if (!id) return null;
-  return list.active.find((n) => n.id === id) ?? list.trashed.find((n) => n.id === id) ?? null;
-}
-
-function bumpLastInteraction(list: NotesList, id: string, now: number): NotesList {
-  let changed = false;
-  const update = (note: NoteMeta) => {
-    if (note.id !== id) return note;
-    if (note.lastInteraction === now) return note;
-    changed = true;
-    return { ...note, lastInteraction: now };
+function appStateSnapshot(getState: () => NotesState) {
+  const state = getState();
+  return {
+    sidebarWidth: state.sidebarWidth,
+    selectedId: state.selectedId,
+    viewMode: state.viewMode,
   };
-  const active = list.active.map(update);
-  const trashed = list.trashed.map(update);
-  return changed ? { active, trashed } : list;
 }
 
 export const useNotesStore = create<NotesState>((set, get) => ({
@@ -252,9 +177,10 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       selectedId: meta.id,
       viewMode: "notes",
       contentById: { ...s.contentById, [meta.id]: "" },
+      lastSavedContentById: { ...s.lastSavedContentById, [meta.id]: "" },
     }));
 
-    scheduleAppStateWrite(get);
+    scheduleAppStateWrite(() => appStateSnapshot(get));
     await api.noteSetActive(meta.id);
 
     // Focus the editor after creating a new note
@@ -283,7 +209,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
         viewMode: shouldOpenTrash ? "trash" : s.viewMode,
       };
     });
-    scheduleAppStateWrite(get);
+    scheduleAppStateWrite(() => appStateSnapshot(get));
 
     if (shouldBumpPrev && prevId) {
       await api.noteSetActive(prevId);
@@ -306,6 +232,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
         ...s,
         list: upsertMeta(s.list, note.meta),
         contentById: { ...s.contentById, [id]: note.content },
+        lastSavedContentById: { ...s.lastSavedContentById, [id]: note.content },
         viewMode: wantsTrashVisible ? "trash" : s.viewMode,
       };
     });
@@ -313,42 +240,45 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   },
   setViewMode: (viewMode) => {
     set((s) => ({ ...s, viewMode }));
-    scheduleAppStateWrite(get);
+    scheduleAppStateWrite(() => appStateSnapshot(get));
   },
   setSidebarWidth: (sidebarWidth) => {
     const clamped = Math.max(200, Math.min(400, sidebarWidth));
     set((s) => ({ ...s, sidebarWidth: clamped }));
-    scheduleAppStateWrite(get);
+    scheduleAppStateWrite(() => appStateSnapshot(get));
   },
   updateContent: (id, content) => {
     const state = get();
+    if (state.contentById[id] === content) return;
     const meta =
       state.list.active.find((n) => n.id === id) ??
       state.list.trashed.find((n) => n.id === id);
     if (!meta) return;
 
+    const previousContent = state.contentById[id] ?? "";
+    const shouldInitializeSavedBaseline =
+      meta.storage === "saved" &&
+      !meta.isTrashed &&
+      typeof state.lastSavedContentById[id] !== "string";
+
     set((s) => ({
       ...s,
       contentById: { ...s.contentById, [id]: content },
-      dirtySavedById:
-        meta.storage === "saved" && !meta.isTrashed
-          ? { ...s.dirtySavedById, [id]: true }
-          : s.dirtySavedById,
+      lastSavedContentById: shouldInitializeSavedBaseline
+        ? { ...s.lastSavedContentById, [id]: previousContent }
+        : s.lastSavedContentById,
     }));
 
     if (meta.storage !== "draft" || meta.isTrashed) return;
 
-    clearDraftSaveTimer(id);
-    const timer = setTimeout(async () => {
-      draftSaveTimers.delete(id);
+    scheduleDraftSave(id, async () => {
       try {
         const updated = await api.noteWriteDraft(id, content);
         set((s) => ({ ...s, list: upsertMeta(s.list, updated) }));
       } catch (err) {
         console.error(`Draft auto-save failed for ${id}:`, err);
       }
-    }, 500);
-    draftSaveTimers.set(id, timer);
+    });
   },
   save: async (id) => {
     const s = get();
@@ -358,12 +288,10 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     const content = s.contentById[id] ?? "";
     const updated = await api.noteSave(id, content);
 
-    const restDirty = { ...s.dirtySavedById };
-    delete restDirty[id];
     set((st) => ({
       ...st,
       list: upsertMeta(st.list, updated),
-      dirtySavedById: restDirty,
+      lastSavedContentById: { ...st.lastSavedContentById, [id]: content },
     }));
   },
   saveAs: async (id, path) => {
@@ -372,30 +300,32 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     const content = s.contentById[id] ?? "";
     const updated = await api.noteSaveAs(id, path, content);
 
-    const restDirty = { ...s.dirtySavedById };
-    delete restDirty[id];
     set((st) => ({
       ...st,
       list: upsertMeta(st.list, updated),
-      dirtySavedById: restDirty,
+      lastSavedContentById: { ...st.lastSavedContentById, [id]: content },
     }));
   },
   saveAllDirty: async () => {
     const s = get();
-    const dirtyIds = Object.keys(s.dirtySavedById);
+    const dirtyIds = getDirtySavedIds(s);
     if (dirtyIds.length === 0) return;
 
-    const updates: NoteMeta[] = [];
+    const updates: Array<{ id: string; meta: NoteMeta; content: string }> = [];
     for (const id of dirtyIds) {
       const content = s.contentById[id] ?? "";
       const updated = await api.noteSave(id, content);
-      updates.push(updated);
+      updates.push({ id, meta: updated, content });
     }
 
     set((st) => {
       let nextList = st.list;
-      for (const meta of updates) nextList = upsertMeta(nextList, meta);
-      return { ...st, list: nextList, dirtySavedById: {} };
+      const nextLastSaved = { ...st.lastSavedContentById };
+      for (const update of updates) {
+        nextList = upsertMeta(nextList, update.meta);
+        nextLastSaved[update.id] = update.content;
+      }
+      return { ...st, list: nextList, lastSavedContentById: nextLastSaved };
     });
   },
   importFile: async (path) => {
@@ -406,22 +336,25 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       selectedId: note.meta.id,
       viewMode: "notes",
       contentById: { ...s.contentById, [note.meta.id]: note.content },
+      lastSavedContentById: { ...s.lastSavedContentById, [note.meta.id]: note.content },
     }));
 
-    scheduleAppStateWrite(get);
+    scheduleAppStateWrite(() => appStateSnapshot(get));
     await api.noteSetActive(note.meta.id);
   },
   trash: async (id) => {
     const updated = await api.noteTrash(id);
     set((s) => {
-      const restDirty = { ...s.dirtySavedById };
-      delete restDirty[id];
+      const nextLastSaved = { ...s.lastSavedContentById };
+      if (typeof s.contentById[id] === "string") {
+        nextLastSaved[id] = s.contentById[id]!;
+      }
 
       return {
         ...s,
         selectedId: s.selectedId === id ? null : s.selectedId,
         list: upsertMeta(s.list, updated),
-        dirtySavedById: restDirty,
+        lastSavedContentById: nextLastSaved,
       };
     });
   },
@@ -440,15 +373,15 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       const nextContent = { ...s.contentById };
       delete nextContent[id];
 
-      const nextDirty = { ...s.dirtySavedById };
-      delete nextDirty[id];
+      const nextLastSaved = { ...s.lastSavedContentById };
+      delete nextLastSaved[id];
 
       return {
         ...s,
         selectedId: s.selectedId === id ? null : s.selectedId,
         list: removeMeta(s.list, id),
         contentById: nextContent,
-        dirtySavedById: nextDirty,
+        lastSavedContentById: nextLastSaved,
       };
     });
   },
@@ -463,10 +396,10 @@ export const useNotesStore = create<NotesState>((set, get) => ({
 
     set((s) => {
       const nextContent = { ...s.contentById };
-      const nextDirty = { ...s.dirtySavedById };
+      const nextLastSaved = { ...s.lastSavedContentById };
       for (const id of ids) {
         delete nextContent[id];
-        delete nextDirty[id];
+        delete nextLastSaved[id];
       }
 
       return {
@@ -474,7 +407,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
         selectedId: s.selectedId && ids.includes(s.selectedId) ? null : s.selectedId,
         list: { ...s.list, trashed: [] },
         contentById: nextContent,
-        dirtySavedById: nextDirty,
+        lastSavedContentById: nextLastSaved,
       };
     });
   },
@@ -486,32 +419,30 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     set((st) => ({ ...st, list: upsertMeta(st.list, updated) }));
   },
   reorder: async (section, ids) => {
-    const prev = getSectionIds(get(), section);
-    pushUndo(section, prev);
+    const prev = getSectionIds(get().list, section);
+    pushReorderUndo(section, prev);
     applyReorderState(set, section, ids);
 
     await api.notesReorder(ids);
     await get().refresh();
   },
   undoReorder: async () => {
-    const entry = reorderUndoStack.pop();
+    const entry = popReorderUndo();
     if (!entry) return;
 
-    const current = getSectionIds(get(), entry.section);
-    reorderRedoStack.push({ section: entry.section, ids: current });
-    if (reorderRedoStack.length > 20) reorderRedoStack.shift();
+    const current = getSectionIds(get().list, entry.section);
+    pushReorderRedo(entry.section, current);
 
     applyReorderState(set, entry.section, entry.ids);
     await api.notesReorder(entry.ids);
     await get().refresh();
   },
   redoReorder: async () => {
-    const entry = reorderRedoStack.pop();
+    const entry = popReorderRedo();
     if (!entry) return;
 
-    const current = getSectionIds(get(), entry.section);
-    reorderUndoStack.push({ section: entry.section, ids: current });
-    if (reorderUndoStack.length > 20) reorderUndoStack.shift();
+    const current = getSectionIds(get().list, entry.section);
+    pushUndoFromRedo(entry.section, current);
 
     applyReorderState(set, entry.section, entry.ids);
     await api.notesReorder(entry.ids);
@@ -556,9 +487,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
 
     set((s) => {
       const nextContent = pruneByIds(s.contentById, allowedIds);
-      const nextDirty = Object.fromEntries(
-        Object.entries(s.dirtySavedById).filter(([id]) => allowedIds.has(id)),
-      );
+      const nextLastSaved = pruneByIds(s.lastSavedContentById, allowedIds);
       const selectedId = s.selectedId && allowedIds.has(s.selectedId) ? s.selectedId : null;
       const selectedIsTrashed = selectedId ? trashedIds.has(selectedId) : false;
 
@@ -568,7 +497,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
         selectedId,
         viewMode: selectedIsTrashed ? "trash" : s.viewMode,
         contentById: nextContent,
-        dirtySavedById: nextDirty,
+        lastSavedContentById: nextLastSaved,
       };
     });
   },
